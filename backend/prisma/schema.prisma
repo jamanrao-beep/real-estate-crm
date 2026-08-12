@@ -159,4 +159,6 @@ model Transaction {
   isLocked            Boolean @default(true) // Locked for editing by default to ensure financial integrity
   correctionRequested Boolean @default(false)
   correctionNotes     String?
+  unlockedById        String?
+  unlockedAt          DateTime?
 }
