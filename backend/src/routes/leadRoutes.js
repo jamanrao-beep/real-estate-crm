@@ -6,6 +6,9 @@ const {
   getMyLeads,
   assignLead,
   autoAssignLeads,
+  markLeadLost,
+  categorizeLead,
+  updateFunnelStage,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
@@ -17,5 +20,11 @@ router.post("/auto-assign", requireAuth, adminOnly, autoAssignLeads);
 
 // Sales Person endpoint
 router.get("/mine", requireAuth, salesOnly, getMyLeads);
+
+// Shared endpoints — Sales Person (own leads only) or Admin (any lead).
+// Ownership is checked inside each controller, not via role middleware.
+router.patch("/:id/lost", requireAuth, markLeadLost);
+router.patch("/:id/category", requireAuth, categorizeLead);
+router.patch("/:id/stage", requireAuth, updateFunnelStage);
 
 module.exports = router;

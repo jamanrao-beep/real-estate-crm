@@ -1,4 +1,4 @@
-const prisma = require("../prisma");
+const prisma = require("../prisma"); // Adjusted path
 
 // GET /api/leads/unassigned
 // Admin's Lead Inbox — section 4.1 of the PRD.
@@ -130,4 +130,128 @@ async function autoAssignLeads(req, res) {
   }
 }
 
-module.exports = { getUnassignedLeads, getAllLeads, getMyLeads, assignLead, autoAssignLeads }; 
+// PATCH /api/leads/:id/lost
+// Marks a lead as Lost/Dropped — PRD section 5.3: "A lead can also be
+// marked as Lost/Dropped at any stage." Sales Person can only do this
+// for their own assigned leads; Admin can do it for any lead as an override.
+async function markLeadLost(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body; // optional free-text, stored in history notes if you extend it later
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    // Ownership check: a Sales Person can only mark their own leads lost.
+    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+
+    const [updatedLead] = await prisma.$transaction([
+      prisma.lead.update({
+        where: { id },
+        data: { status: "LOST", funnelStage: "LOST" },
+      }),
+      prisma.leadStatusHistory.create({
+        data: {
+          leadId: id,
+          stage: "LOST",
+          changedById: req.user.userId,
+        },
+      }),
+    ]);
+
+    return res.json(updatedLead);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to mark lead as lost" });
+  }
+}
+
+// PATCH /api/leads/:id/category   body: { category: "HOT" | "WARM" | "COLD" }
+// PRD 5.2 — Sales Person marks a lead Hot/Warm/Cold. Admin can override too.
+async function categorizeLead(req, res) {
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+
+    if (!["HOT", "WARM", "COLD"].includes(category)) {
+      return res.status(400).json({ error: "category must be HOT, WARM, or COLD" });
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+
+    const updatedLead = await prisma.lead.update({
+      where: { id },
+      data: { category },
+    });
+
+    return res.json(updatedLead);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to update category" });
+  }
+}
+
+// PATCH /api/leads/:id/stage   body: { stage: "INTERESTED" | "SITE_VISIT_DONE" | "DEAL_CLOSED" }
+// PRD 5.3 — moves a lead through the funnel. Manual, sales-person driven.
+// (Marking LOST has its own dedicated endpoint — /:id/lost — since that's
+// a distinct action with its own PRD wording, not part of forward progression.)
+async function updateFunnelStage(req, res) {
+  try {
+    const { id } = req.params;
+    const { stage } = req.body;
+
+    if (!["INTERESTED", "SITE_VISIT_DONE", "DEAL_CLOSED"].includes(stage)) {
+      return res.status(400).json({ error: "stage must be INTERESTED, SITE_VISIT_DONE, or DEAL_CLOSED" });
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+
+    const [updatedLead] = await prisma.$transaction([
+      prisma.lead.update({
+        where: { id },
+        data: { funnelStage: stage },
+      }),
+      prisma.leadStatusHistory.create({
+        data: {
+          leadId: id,
+          stage,
+          changedById: req.user.userId,
+        },
+      }),
+    ]);
+
+    return res.json(updatedLead);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to update funnel stage" });
+  }
+}
+
+module.exports = {
+  getUnassignedLeads,
+  getAllLeads,
+  getMyLeads,
+  assignLead,
+  autoAssignLeads,
+  markLeadLost,
+  categorizeLead,
+  updateFunnelStage,
+};

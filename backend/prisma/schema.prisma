@@ -155,4 +155,8 @@ model Transaction {
   loggedBy        User        @relation(fields: [loggedById], references: [id])
 
   createdAt       DateTime    @default(now()) // server-set, never accepted from client input
+  
+  isLocked            Boolean @default(true) // Locked for editing by default to ensure financial integrity
+  correctionRequested Boolean @default(false)
+  correctionNotes     String?
 }
