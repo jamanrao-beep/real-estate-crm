@@ -1,0 +1,158 @@
+// This is your Prisma schema file.
+// It defines every database table and how they relate to each other.
+// Run `npx prisma migrate dev --name init` to create these tables in your database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // swap to "mysql" or "sqlite" if you prefer
+}
+
+// ---------- ENUMS ----------
+
+enum Role {
+  ADMIN
+  SALES_PERSON
+}
+
+enum LeadCategory {
+  HOT
+  WARM
+  COLD
+}
+
+enum FunnelStage {
+  INTERESTED
+  SITE_VISIT_DONE
+  DEAL_CLOSED
+  LOST
+}
+
+enum LeadStatus {
+  ACTIVE
+  LOST
+}
+
+enum PaymentMode {
+  UPI
+  CASH
+  NET_BANKING
+  CHEQUE
+  RTGS
+}
+
+// ---------- CORE MODELS ----------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true) // used for round-robin: only assign to active sales people
+  createdAt    DateTime @default(now())
+
+  // Relations: things this user (if a Sales Person) owns
+  assignedLeads     Lead[]               @relation("AssignedLeads")
+  callLogs          CallLog[]
+  transactionsLogged Transaction[]
+  assignmentsMade   LeadAssignmentHistory[] @relation("AssignedBy")
+  statusChangesMade LeadStatusHistory[]
+}
+
+model Lead {
+  id           String       @id @default(uuid())
+  name         String
+  phone        String
+  email        String?
+  source       String       // e.g. "Facebook Lead Ad - Spring Promo"
+  formAnswers  Json?        // raw answers from the Facebook lead form
+
+  category     LeadCategory @default(WARM)
+  funnelStage  FunnelStage  @default(INTERESTED)
+  status       LeadStatus   @default(ACTIVE)
+
+  assignedToId String?
+  assignedTo   User?        @relation("AssignedLeads", fields: [assignedToId], references: [id])
+
+  dateReceived DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  callLogs           CallLog[]
+  deals              Deal[]
+  assignmentHistory  LeadAssignmentHistory[]
+  statusHistory      LeadStatusHistory[]
+}
+
+// Tracks who a lead was assigned to over time (for audit + reassignment history)
+model LeadAssignmentHistory {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+
+  assignedToId String
+  assignedById String
+  assignedBy   User     @relation("AssignedBy", fields: [assignedById], references: [id])
+
+  assignedAt   DateTime @default(now())
+}
+
+// Tracks every funnel stage change (lets Admin calculate time-in-stage, conversion rates)
+model LeadStatusHistory {
+  id          String      @id @default(uuid())
+  leadId      String
+  lead        Lead        @relation(fields: [leadId], references: [id])
+
+  stage       FunnelStage
+  changedById String
+  changedBy   User        @relation(fields: [changedById], references: [id])
+
+  changedAt   DateTime    @default(now())
+}
+
+model CallLog {
+  id            String    @id @default(uuid())
+  leadId        String
+  lead          Lead      @relation(fields: [leadId], references: [id])
+
+  salesPersonId String
+  salesPerson   User      @relation(fields: [salesPersonId], references: [id])
+
+  startTime     DateTime?
+  endTime       DateTime?
+  durationSecs  Int?      // store computed duration for easy reporting
+  notes         String?
+
+  createdAt     DateTime  @default(now())
+}
+
+// A Deal represents the agreed sale tied to a lead once it's being closed.
+// Transactions (installments) are logged against a Deal.
+model Deal {
+  id          String        @id @default(uuid())
+  leadId      String
+  lead        Lead          @relation(fields: [leadId], references: [id])
+
+  dealAmount  Decimal       @db.Decimal(12, 2) // total agreed value (X)
+  createdAt   DateTime      @default(now())
+
+  transactions Transaction[]
+}
+
+model Transaction {
+  id              String      @id @default(uuid())
+  dealId          String
+  deal            Deal        @relation(fields: [dealId], references: [id])
+
+  amountPaid      Decimal     @db.Decimal(12, 2) // this installment (Y)
+  paymentMode     PaymentMode
+  referenceNumber String?     // required for everything except CASH — validate in app logic
+
+  loggedById      String
+  loggedBy        User        @relation(fields: [loggedById], references: [id])
+
+  createdAt       DateTime    @default(now()) // server-set, never accepted from client input
+}
