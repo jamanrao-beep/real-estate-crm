@@ -1,9 +1,12 @@
-// Reusing one PrismaClient instance across the whole app avoids
-// exhausting your database's connection limit during development
-// (hot-reloading would otherwise create a new client every time).
+require('dotenv').config();
+const { PrismaClient } = require('@prisma/client');
+const { Pool } = require('pg');
+const { PrismaPg } = require('@prisma/adapter-pg');
 
-const { PrismaClient } = require("@prisma/client");
+const connectionString = process.env.DATABASE_URL;
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
-module.exports = prisma; 
+module.exports = prisma;

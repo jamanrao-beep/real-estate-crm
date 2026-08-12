@@ -1,11 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const authRoutes = require("./routes/authRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
+const leadRoutes = require("./routes/leadRoutes");
 
 const app = express();
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/webhooks", webhookRoutes);
+app.use("/api/leads", leadRoutes);
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
