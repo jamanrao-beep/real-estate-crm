@@ -8,7 +8,6 @@ generator client {
 
 datasource db {
   provider = "postgresql" // swap to "mysql" or "sqlite" if you prefer
-  url      = env("DATABASE_URL")
 }
 
 // ---------- ENUMS ----------

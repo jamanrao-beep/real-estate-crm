@@ -5,6 +5,7 @@ const webhookRoutes = require("./routes/webhookRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const callRoutes = require("./routes/callRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
 app.use(express.json());
@@ -14,6 +15,7 @@ app.use("/webhooks", webhookRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/calls", callRoutes);
 app.use("/api", paymentRoutes);
+app.use("/api/reports", reportRoutes);
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
