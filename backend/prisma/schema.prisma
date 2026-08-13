@@ -8,6 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql" // swap to "mysql" or "sqlite" if you prefer
+  url      = env("DATABASE_URL")
 }
 
 // ---------- ENUMS ----------
@@ -58,6 +59,7 @@ model User {
   assignedLeads     Lead[]               @relation("AssignedLeads")
   callLogs          CallLog[]
   transactionsLogged Transaction[]
+  transactionsUnlocked Transaction[]      @relation("TransactionUnlockedBy")
   assignmentsMade   LeadAssignmentHistory[] @relation("AssignedBy")
   statusChangesMade LeadStatusHistory[]
 }
@@ -155,10 +157,13 @@ model Transaction {
   loggedBy        User        @relation(fields: [loggedById], references: [id])
 
   createdAt       DateTime    @default(now()) // server-set, never accepted from client input
-  
-  isLocked            Boolean @default(true) // Locked for editing by default to ensure financial integrity
-  correctionRequested Boolean @default(false)
-  correctionNotes     String?
-  unlockedById        String?
-  unlockedAt          DateTime?
+
+  // Q6 decision: transactions lock once saved. A sales person cannot edit
+  // or delete after creation. An Admin can unlock (isLocked = false) to
+  // make a correction, then it re-locks. unlockedById/unlockedAt give you
+  // an audit trail of who approved the correction and when.
+  isLocked        Boolean     @default(true)
+  unlockedById    String?
+  unlockedBy      User?       @relation("TransactionUnlockedBy", fields: [unlockedById], references: [id])
+  unlockedAt      DateTime?
 }
