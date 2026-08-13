@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #F7F5F0;
+  --color-surface: #FFFFFF;
+  --color-ink: #1E2A32;
+  --color-ink-soft: #5B6670;
+  --color-accent: #9C7A45;
+  --color-accent-soft: #E8DEC9;
+  --color-success: #5F7A5F;
+  --color-warning: #B8894C;
+  --color-danger: #A34F44;
+  --color-border: #E4DFD5;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-accent: var(--color-accent);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-border: var(--color-border);
+
+  --font-serif: var(--font-fraunces), serif;
+  --font-sans: var(--font-public-sans), sans-serif;
+  --font-mono: var(--font-plex-mono), monospace;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Base Ledger Table Utility */
+.ledger-row {
+  @apply border-b border-border py-4 transition-colors hover:bg-surface/50;
+}
