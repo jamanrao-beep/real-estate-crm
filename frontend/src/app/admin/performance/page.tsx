@@ -129,21 +129,30 @@ export default function PerformanceDashboard() {
                   <tr key={r.salesPerson.id} className="hover:bg-surface/50 transition-colors">
                     <td className="p-4 align-top">
                       <div className="font-medium text-ink text-lg">{r.salesPerson.name}</div>
-                      <div className="mt-4 flex gap-2 flex-wrap">
-                        {r.categoryBreakdown.map((cb) => (
-                          <Badge
-                            key={cb.category}
-                            variant={
-                              cb.category === "HOT"
-                                ? "danger"
-                                : cb.category === "WARM"
-                                ? "warning"
-                                : "default"
-                            }
-                          >
-                            {cb.count} {cb.category}
-                          </Badge>
-                        ))}
+                      <div className="mt-4 flex flex-col gap-2">
+                        <div className="flex gap-2 flex-wrap">
+                          {r.categoryBreakdown.map((cb) => (
+                            <Badge
+                              key={cb.category}
+                              variant={
+                                cb.category === "HOT"
+                                  ? "danger"
+                                  : cb.category === "WARM"
+                                  ? "warning"
+                                  : "default"
+                              }
+                            >
+                              {cb.count} {cb.category}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 flex-wrap mt-1">
+                          {r.funnelBreakdown.map((fb) => (
+                            <Badge key={fb.stage} variant="outline" className="text-[10px] font-mono">
+                              {fb.count} {fb.stage.replace(/_/g, " ")}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 align-top text-right">
