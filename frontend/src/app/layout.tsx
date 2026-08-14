@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   description: "Ledger-style CRM for Real Estate Sales and Management",
 };
 
+import { AuthProvider } from "@/context/AuthContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -36,7 +38,9 @@ export default function RootLayout({
       <body
         className={`${fraunces.variable} ${publicSans.variable} ${plexMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
