@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   createDeal,
   getDeal,
+  getMyDeals,
   logTransaction,
   getMyTransactions,
   getAllTransactions,
@@ -13,6 +14,7 @@ const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
 // Deals
 router.post("/deals", requireAuth, salesOnly, createDeal);
+router.get("/deals/mine", requireAuth, salesOnly, getMyDeals);
 router.get("/deals/:id", requireAuth, getDeal); // ownership checked inside controller
 
 // Transactions

@@ -5,9 +5,11 @@ const webhookRoutes = require("./routes/webhookRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const callRoutes = require("./routes/callRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const cors = require("cors");
 const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);

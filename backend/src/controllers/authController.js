@@ -58,4 +58,20 @@ async function login(req, res) {
   }
 }
 
-module.exports = { createUser, login };
+async function getAllUsers(req, res) {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: "SALES_PERSON" },
+      select: { id: true, name: true, email: true }
+    });
+    return res.json(users);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch users" });
+  }
+}
+
+module.exports = {
+  createUser,
+  login,
+  getAllUsers
+};

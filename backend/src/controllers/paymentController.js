@@ -70,6 +70,24 @@ async function getDeal(req, res) {
   }
 }
 
+// GET /api/deals/mine
+async function getMyDeals(req, res) {
+  try {
+    const deals = await prisma.deal.findMany({
+      where: { lead: { assignedToId: req.user.userId } },
+      include: { 
+        lead: { select: { id: true, name: true } },
+        transactions: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    return res.json(deals.map(withRunningBalance));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to fetch your deals" });
+  }
+}
+
 // POST /api/deals/:dealId/transactions
 // body: { amountPaid, paymentMode, referenceNumber }
 // PRD 5.5 — logs an installment payment. Multiple entries allowed per deal.
@@ -226,6 +244,7 @@ async function editTransaction(req, res) {
 module.exports = {
   createDeal,
   getDeal,
+  getMyDeals,
   logTransaction,
   getMyTransactions,
   getAllTransactions,
