@@ -36,4 +36,11 @@ function salesOnly(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, adminOnly, salesOnly };
+function brokerOnly(req, res, next) {
+  if (req.user?.role !== "BROKER") {
+    return res.status(403).json({ error: "Broker access required" });
+  }
+  next();
+}
+
+module.exports = { requireAuth, adminOnly, salesOnly, brokerOnly };

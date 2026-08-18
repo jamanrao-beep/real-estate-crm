@@ -144,9 +144,12 @@ async function markLeadLost(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    // Ownership check: a Sales Person can only mark their own leads lost.
+    // Ownership check
     if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
       return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads you referred" });
     }
 
     const [updatedLead] = await prisma.$transaction([
@@ -189,6 +192,9 @@ async function categorizeLead(req, res) {
     if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
       return res.status(403).json({ error: "You can only update leads assigned to you" });
     }
+    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads you referred" });
+    }
 
     const updatedLead = await prisma.lead.update({
       where: { id },
@@ -222,6 +228,9 @@ async function updateFunnelStage(req, res) {
 
     if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
       return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads you referred" });
     }
 
     const [updatedLead] = await prisma.$transaction([

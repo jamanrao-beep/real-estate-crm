@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock } from "lucide-react";
+import { Search, XCircle, Plus } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -23,16 +23,16 @@ export default function MyLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Call Log Modal State
-  const [activeCallLead, setActiveCallLead] = useState<Lead | null>(null);
-  const [callNotes, setCallNotes] = useState("");
-  const [callStart, setCallStart] = useState("");
-  const [callEnd, setCallEnd] = useState("");
+  // Submit Lead Modal State
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+  const [newLeadEmail, setNewLeadEmail] = useState("");
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await api.get("/leads/mine");
+      const res = await api.get("/broker/leads");
       setLeads(res.data);
     } catch (err) {
       console.error("Failed to fetch my leads", err);
@@ -76,49 +76,44 @@ export default function MyLeadsPage() {
     }
   };
 
-  const handleLogCall = async (e: React.FormEvent) => {
+
+
+  const handleSubmitLead = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCallLead || !callStart || !callEnd) return;
+    if (!newLeadName || !newLeadPhone) return;
 
     try {
-      await api.post("/calls", {
-        leadId: activeCallLead.id,
-        startTime: new Date(callStart).toISOString(),
-        endTime: new Date(callEnd).toISOString(),
-        notes: callNotes
+      const res = await api.post("/broker/leads", {
+        name: newLeadName,
+        phone: newLeadPhone,
+        email: newLeadEmail,
+        source: "Channel Partner Portal"
       });
-      alert("Call logged successfully!");
-      setActiveCallLead(null);
-      setCallStart("");
-      setCallEnd("");
-      setCallNotes("");
+      setLeads([res.data, ...leads]);
+      alert("Lead submitted successfully!");
+      setIsSubmitModalOpen(false);
+      setNewLeadName("");
+      setNewLeadPhone("");
+      setNewLeadEmail("");
     } catch (err: any) {
-      console.error("Failed to log call", err);
-      alert(err.response?.data?.error || "Failed to log call");
+      console.error("Failed to submit lead", err);
+      alert(err.response?.data?.error || "Failed to submit lead");
     }
-  };
-
-  const openCallModal = (lead: Lead) => {
-    const now = new Date();
-    // Default to 15 mins ago to now to save clicks
-    const end = now.toISOString().slice(0, 16);
-    const start = new Date(now.getTime() - 15 * 60000).toISOString().slice(0, 16);
-    
-    setCallStart(start);
-    setCallEnd(end);
-    setCallNotes("");
-    setActiveCallLead(lead);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-serif text-ink">My Leads Workspace</h1>
+          <h1 className="text-2xl font-serif text-ink">My Submitted Leads</h1>
           <p className="text-sm text-ink-soft mt-1">
-            Manage your assigned leads, update progress, and log interactions.
+            Manage your submitted leads, update progress, and log interactions.
           </p>
         </div>
+        <Button onClick={() => setIsSubmitModalOpen(true)}>
+          <Plus size={16} className="mr-2" />
+          Submit New Lead
+        </Button>
       </div>
 
       <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
@@ -195,15 +190,6 @@ export default function MyLeadsPage() {
                     <td className="p-4 align-top text-right">
                       <div className="flex justify-end gap-2">
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openCallModal(lead)}
-                          disabled={lead.status === "LOST"}
-                        >
-                          <Phone size={14} className="mr-1.5" />
-                          Log Call
-                        </Button>
-                        <Button
                           variant="ghost"
                           size="sm"
                           className="text-danger hover:bg-danger/10 hover:text-danger"
@@ -223,47 +209,48 @@ export default function MyLeadsPage() {
         </div>
       </div>
 
-      {/* Call Logging Modal */}
-      {activeCallLead && (
+
+
+      {/* Submit Lead Modal */}
+      {isSubmitModalOpen && (
         <div className="fixed inset-0 bg-ink/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface border border-border rounded-lg shadow-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-serif text-ink mb-1">Log Call</h3>
-            <p className="text-sm text-ink-soft mb-6">Record interaction with {activeCallLead.name}</p>
+            <h3 className="text-lg font-serif text-ink mb-1">Submit New Lead</h3>
+            <p className="text-sm text-ink-soft mb-6">Enter the details of the lead you referred.</p>
             
-            <form onSubmit={handleLogCall} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Start Time</label>
-                  <Input 
-                    type="datetime-local" 
-                    required 
-                    value={callStart}
-                    onChange={(e) => setCallStart(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">End Time</label>
-                  <Input 
-                    type="datetime-local" 
-                    required 
-                    value={callEnd}
-                    onChange={(e) => setCallEnd(e.target.value)}
-                  />
-                </div>
+            <form onSubmit={handleSubmitLead} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Name</label>
+                <Input 
+                  type="text" 
+                  required 
+                  value={newLeadName}
+                  onChange={(e) => setNewLeadName(e.target.value)}
+                  placeholder="John Doe"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Notes (Optional)</label>
-                <textarea
-                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  rows={3}
-                  value={callNotes}
-                  onChange={(e) => setCallNotes(e.target.value)}
-                  placeholder="Discussed pricing, client wants to visit..."
+                <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Phone</label>
+                <Input 
+                  type="tel" 
+                  required 
+                  value={newLeadPhone}
+                  onChange={(e) => setNewLeadPhone(e.target.value)}
+                  placeholder="+91 9876543210"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Email (Optional)</label>
+                <Input 
+                  type="email" 
+                  value={newLeadEmail}
+                  onChange={(e) => setNewLeadEmail(e.target.value)}
+                  placeholder="john@example.com"
                 />
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <Button type="button" variant="ghost" onClick={() => setActiveCallLead(null)}>Cancel</Button>
-                <Button type="submit">Save Call Record</Button>
+                <Button type="button" variant="ghost" onClick={() => setIsSubmitModalOpen(false)}>Cancel</Button>
+                <Button type="submit">Submit Lead</Button>
               </div>
             </form>
           </div>

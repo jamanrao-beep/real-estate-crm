@@ -7,6 +7,7 @@ const callRoutes = require("./routes/callRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const cors = require("cors");
 const reportRoutes = require("./routes/reportRoutes");
+const brokerRoutes = require("./routes/brokerRoutes");
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,7 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/calls", callRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/broker", brokerRoutes);
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
