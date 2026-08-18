@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
-export type Role = "ADMIN" | "SALES_PERSON";
+export type Role = "ADMIN" | "SALES_PERSON" | "BROKER";
 
 export interface User {
   id: string;
@@ -49,8 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Redirect based on role
     if (newUser.role === "ADMIN") {
       router.push("/admin/leads/unassigned");
-    } else {
+    } else if (newUser.role === "SALES_PERSON") {
       router.push("/sales/leads");
+    } else if (newUser.role === "BROKER") {
+      router.push("/broker/leads");
     }
   };
 
@@ -69,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAuthRoute = pathname?.startsWith("/login");
     const isAdminRoute = pathname?.startsWith("/admin");
     const isSalesRoute = pathname?.startsWith("/sales");
+    const isBrokerRoute = pathname?.startsWith("/broker");
 
     if (!user && !isAuthRoute) {
       // Not logged in, redirect to login
@@ -77,15 +80,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Logged in but on login page, redirect to correct dashboard
       if (user.role === "ADMIN") {
         router.push("/admin/leads/unassigned");
-      } else {
+      } else if (user.role === "SALES_PERSON") {
         router.push("/sales/leads");
+      } else if (user.role === "BROKER") {
+        router.push("/broker/leads");
       }
     } else if (user && isAdminRoute && user.role !== "ADMIN") {
       // Unauthorized role trying to access admin
-      router.push("/sales/leads");
+      router.push(user.role === "SALES_PERSON" ? "/sales/leads" : "/broker/leads");
     } else if (user && isSalesRoute && user.role !== "SALES_PERSON") {
        // Unauthorized role trying to access sales
-       router.push("/admin/leads/unassigned");
+       router.push(user.role === "ADMIN" ? "/admin/leads/unassigned" : "/broker/leads");
+    } else if (user && isBrokerRoute && user.role !== "BROKER") {
+       // Unauthorized role trying to access broker
+       router.push(user.role === "ADMIN" ? "/admin/leads/unassigned" : "/sales/leads");
     }
   }, [user, isLoading, pathname, router]);
 
