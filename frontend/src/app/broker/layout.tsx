@@ -29,7 +29,7 @@ export default function BrokerLayout({ children }: { children: React.ReactNode }
                 <Building2 size={24} strokeWidth={1.5} />
                 <span className="font-serif text-lg text-ink font-semibold">Broker Workspace</span>
               </div>
-              <nav className="hidden sm:ml-8 sm:flex sm:space-x-8">
+              <nav className="hidden sm:ml-6 sm:flex sm:space-x-4 lg:space-x-8">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
                   return (
@@ -37,7 +37,7 @@ export default function BrokerLayout({ children }: { children: React.ReactNode }
                       key={item.name}
                       href={item.href}
                       className={cn(
-                        "inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors",
+                        "inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap",
                         isActive
                           ? "border-accent text-ink"
                           : "border-transparent text-ink-soft hover:text-ink hover:border-border"
@@ -51,7 +51,7 @@ export default function BrokerLayout({ children }: { children: React.ReactNode }
               </nav>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-ink-soft">
+              <span className="text-sm text-ink-soft hidden md:block whitespace-nowrap">
                 Signed in as <strong className="text-ink">{user.name}</strong>
               </span>
               <Button variant="ghost" size="sm" onClick={logout}>

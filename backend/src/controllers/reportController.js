@@ -55,18 +55,17 @@ async function computePerformance(salesPersonId, start, end) {
       _count: true,
     }),
 
-    // Current Hot/Warm/Cold breakdown (a snapshot, not period-bound —
-    // category isn't historically tracked in this schema)
+    // Breakdown of leads received in this period (current snapshot of their status)
     prisma.lead.groupBy({
       by: ["category"],
-      where: { assignedToId: salesPersonId },
+      where: { assignedToId: salesPersonId, dateReceived: { gte: start, lt: end } },
       _count: true,
     }),
 
-    // Current funnel breakdown (snapshot)
+    // Funnel breakdown of leads received in this period
     prisma.lead.groupBy({
       by: ["funnelStage"],
-      where: { assignedToId: salesPersonId },
+      where: { assignedToId: salesPersonId, dateReceived: { gte: start, lt: end } },
       _count: true,
     }),
 

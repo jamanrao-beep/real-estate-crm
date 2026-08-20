@@ -91,7 +91,8 @@ export default function BrokerDealsPage() {
                       {new Date(lead.dateReceived).toLocaleDateString()}
                     </td>
                     <td className="p-4 align-top text-right text-sm text-success font-medium">
-                      {new Date(lead.updatedAt).toLocaleDateString()}
+                      <div>{new Date(lead.updatedAt).toLocaleDateString()}</div>
+                      <div className="text-xs text-success/70 mt-0.5">{new Date(lead.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
                   </tr>
                 ))
@@ -99,8 +100,6 @@ export default function BrokerDealsPage() {
             </tbody>
           </table>
         </div>
-      </div>
-
       </div>
     </div>
   );

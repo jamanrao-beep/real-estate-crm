@@ -11,32 +11,40 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // Check if admin already exists
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: 'admin@crm.com' },
-  });
-
-  if (existingAdmin) {
-    console.log('Admin user already exists!');
-    return;
+  // Seed Admin
+  let admin = await prisma.user.findUnique({ where: { email: 'admin@crm.com' } });
+  if (!admin) {
+    admin = await prisma.user.create({
+      data: { name: 'System Admin', email: 'admin@crm.com', passwordHash: await bcrypt.hash('admin123', 10), role: 'ADMIN' },
+    });
+    console.log('Admin user created successfully: admin@crm.com / admin123');
   }
 
-  // Hash password
-  const passwordHash = await bcrypt.hash('admin123', 10);
+  // Seed 4 Sales Persons
+  for (let i = 1; i <= 4; i++) {
+    const email = `sales${i}@crm.com`;
+    let sales = await prisma.user.findUnique({ where: { email } });
+    if (!sales) {
+      await prisma.user.create({
+        data: { 
+          name: `Sales ${i}`, 
+          email, 
+          passwordHash: await bcrypt.hash('sales123', 10), 
+          role: 'SALES_PERSON' 
+        },
+      });
+      console.log(`Sales user created successfully: ${email} / sales123`);
+    }
+  }
 
-  // Create admin user
-  const admin = await prisma.user.create({
-    data: {
-      name: 'System Admin',
-      email: 'admin@crm.com',
-      passwordHash,
-      role: 'ADMIN',
-    },
-  });
-
-  console.log('Admin user created successfully:');
-  console.log('Email: admin@crm.com');
-  console.log('Password: admin123');
+  // Seed Broker
+  let broker = await prisma.user.findUnique({ where: { email: 'broker@crm.com' } });
+  if (!broker) {
+    broker = await prisma.user.create({
+      data: { name: 'Channel Partner', email: 'broker@crm.com', passwordHash: await bcrypt.hash('broker123', 10), role: 'BROKER' },
+    });
+    console.log('Broker user created successfully: broker@crm.com / broker123');
+  }
 }
 
 main()

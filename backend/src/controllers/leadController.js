@@ -247,6 +247,21 @@ async function updateFunnelStage(req, res) {
       }),
     ]);
 
+    if (stage === "DEAL_CLOSED") {
+      const actor = await prisma.user.findUnique({ where: { id: req.user.userId } });
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN" } });
+      const message = `Deal Closed: ${actor?.name || "A team member"} has finalized a deal with ${updatedLead.name}.`;
+      
+      if (admins.length > 0) {
+        await prisma.notification.createMany({
+          data: admins.map((admin) => ({
+            userId: admin.id,
+            message,
+          })),
+        });
+      }
+    }
+
     return res.json(updatedLead);
   } catch (err) {
     console.error(err);
