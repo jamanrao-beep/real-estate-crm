@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
-import { Building2, LogOut, Users, Inbox, Activity, CreditCard, Bell } from "lucide-react";
+import { Building2, LogOut, Users, Inbox, Activity, CreditCard, Bell, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -45,6 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Inbox", href: "/admin/leads/unassigned", icon: Inbox },
     { name: "All Leads", href: "/admin/leads", icon: Users },
     { name: "Performance", href: "/admin/performance", icon: Activity },
+    { name: "Deals", href: "/admin/deals", icon: Briefcase },
     { name: "Transactions", href: "/admin/transactions", icon: CreditCard },
   ];
 
@@ -53,13 +54,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Top Navigation */}
       <header className="bg-surface border-b border-border sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+          <div className="flex justify-between h-16 gap-4">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center gap-2 text-accent">
                 <Building2 size={24} strokeWidth={1.5} />
-                <span className="font-serif text-lg text-ink font-semibold">Admin Ledger</span>
+                <span className="font-serif text-lg text-ink font-semibold pr-4">Admin Ledger</span>
               </div>
-              <nav className="hidden sm:ml-6 sm:flex sm:space-x-4 lg:space-x-8">
+              <nav className="hidden sm:ml-4 sm:flex sm:space-x-2 lg:space-x-4 xl:space-x-8">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
                   return (
@@ -80,7 +81,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 })}
               </nav>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-shrink-0">
               <div className="relative">
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
@@ -88,7 +89,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   <Bell size={20} />
                   {notifications.length > 0 && (
-                    <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 text-[8px] text-white"></span>
+                    <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
                   )}
                 </button>
                 {showNotifications && (
@@ -118,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </div>
                 )}
               </div>
-              <span className="text-sm text-ink-soft hidden md:block whitespace-nowrap">
+              <span className="text-sm text-ink-soft hidden xl:block whitespace-nowrap">
                 Signed in as <strong className="text-ink">{user.name}</strong>
               </span>
               <Button variant="ghost" size="sm" onClick={logout}>

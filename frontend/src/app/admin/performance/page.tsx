@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { RefreshCw, TrendingUp, Phone, Users, DollarSign } from "lucide-react";
+import { RefreshCw, TrendingUp, Phone, Users, DollarSign, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface PerformanceResult {
@@ -46,6 +46,24 @@ export default function PerformanceDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, year]);
 
+  const handleDownloadCSV = async () => {
+    try {
+      const res = await api.get(`/reports/performance/export?month=${month}&year=${year}`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `performance_report_${year}_${month}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Failed to download CSV", err);
+      alert("Failed to download CSV");
+    }
+  };
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(val);
 
@@ -86,8 +104,18 @@ export default function PerformanceDashboard() {
             onClick={fetchPerformance}
             disabled={isLoading}
             className="px-2"
+            title="Refresh"
           >
             <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDownloadCSV}
+            disabled={isLoading}
+            className="ml-2"
+          >
+            <FileDown size={16} className="mr-2" />
+            Export CSV
           </Button>
         </div>
       </div>

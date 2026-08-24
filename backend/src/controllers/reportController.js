@@ -212,9 +212,63 @@ async function exportMyTransactions(req, res) {
   }
 }
 
+// GET /api/reports/performance/export
+async function exportPerformance(req, res) {
+  try {
+    const { month, year } = req.query;
+    const { start, end } = resolveMonthRange(month, year);
+
+    const salesPeople = await prisma.user.findMany({ where: { role: "SALES_PERSON" } });
+
+    const results = await Promise.all(
+      salesPeople.map(async (sp) => {
+        const perf = await computePerformance(sp.id, start, end);
+        return {
+          salesPersonName: sp.name,
+          ...perf
+        };
+      })
+    );
+
+    const flatResults = results.map(r => ({
+      Sales_Person: r.salesPersonName,
+      Leads_Received: r.totalLeadsReceived,
+      Leads_Converted: r.totalLeadsConverted,
+      Conversion_Rate: r.totalLeadsReceived ? Math.round((r.totalLeadsConverted / r.totalLeadsReceived) * 100) + '%' : '0%',
+      Site_Visits: r.siteVisitsDone,
+      Number_Of_Calls: r.numberOfCalls,
+      Call_Hours: r.callHours,
+      Total_Sales_Value: r.totalSalesValueClosed,
+      Total_Payments_Collected: r.totalPaymentsCollected,
+      Period: `${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`
+    }));
+
+    const csv = toCSV(flatResults, [
+      { label: "Sales Person", value: "Sales_Person" },
+      { label: "Leads Received", value: "Leads_Received" },
+      { label: "Leads Converted", value: "Leads_Converted" },
+      { label: "Conversion Rate", value: "Conversion_Rate" },
+      { label: "Site Visits", value: "Site_Visits" },
+      { label: "Number Of Calls", value: "Number_Of_Calls" },
+      { label: "Call Hours", value: "Call_Hours" },
+      { label: "Total Sales Value", value: "Total_Sales_Value" },
+      { label: "Total Payments Collected", value: "Total_Payments_Collected" },
+      { label: "Period", value: "Period" },
+    ]);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=performance_report.csv");
+    return res.send(csv);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to export performance report" });
+  }
+}
+
 module.exports = {
   getSalesPersonPerformance,
   getAllPerformance,
+  exportPerformance,
   exportAllTransactions,
   exportMyTransactions,
 };

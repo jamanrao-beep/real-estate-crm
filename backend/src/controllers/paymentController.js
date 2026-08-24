@@ -42,6 +42,51 @@ async function createDeal(req, res) {
   }
 }
 
+// PATCH /api/deals/:id/template   body: { plotNumber, plotImage, templateDetails }
+// Admin only - saves final deal template and plot marking
+async function updateDealTemplate(req, res) {
+  try {
+    const { id } = req.params;
+    const { plotNumber, plotImage, templateDetails } = req.body;
+
+    const deal = await prisma.deal.findUnique({ where: { id } });
+    if (!deal) return res.status(404).json({ error: "Deal not found" });
+
+    const updated = await prisma.deal.update({
+      where: { id },
+      data: {
+        ...(plotNumber !== undefined && { plotNumber }),
+        ...(plotImage !== undefined && { plotImage }),
+        ...(templateDetails !== undefined && { templateDetails })
+      }
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to update deal template" });
+  }
+}
+
+// GET /api/deals   — admin endpoint to get all deals
+async function getAllDeals(req, res) {
+  try {
+    const deals = await prisma.deal.findMany({
+      include: {
+        lead: { select: { id: true, name: true } },
+        transactions: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    
+    const dealsWithBalance = deals.map(withRunningBalance);
+    return res.json(dealsWithBalance);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to fetch deals" });
+  }
+}
+
 // GET /api/deals/:id   — deal detail with all transactions + running balance
 async function getDeal(req, res) {
   try {
@@ -243,7 +288,9 @@ async function editTransaction(req, res) {
 
 module.exports = {
   createDeal,
+  updateDealTemplate,
   getDeal,
+  getAllDeals,
   getMyDeals,
   logTransaction,
   getMyTransactions,

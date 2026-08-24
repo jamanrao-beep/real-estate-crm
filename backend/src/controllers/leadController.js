@@ -269,6 +269,61 @@ async function updateFunnelStage(req, res) {
   }
 }
 
+// PATCH /api/leads/:id/ai-chat
+async function logAiChatMessage(req, res) {
+  try {
+    const { id } = req.params;
+    const { message, sender } = req.body;
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    // Ensure it's an array
+    const chatHistory = Array.isArray(lead.aiChatHistory) ? lead.aiChatHistory : [];
+    chatHistory.push({
+      sender: sender || "bot",
+      message,
+      timestamp: new Date().toISOString(),
+    });
+
+    const updated = await prisma.lead.update({
+      where: { id },
+      data: { aiChatHistory: chatHistory },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to log AI chat message" });
+  }
+}
+
+// PATCH /api/leads/:id/follow-up
+async function scheduleFollowUp(req, res) {
+  try {
+    const { id } = req.params;
+    const { followUpAt } = req.body;
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    // Ownership check
+    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: "You can only update leads assigned to you" });
+    }
+    
+    const updatedLead = await prisma.lead.update({
+      where: { id },
+      data: { followUpAt: followUpAt ? new Date(followUpAt) : null },
+    });
+
+    return res.json(updatedLead);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to schedule follow-up" });
+  }
+}
+
 module.exports = {
   getUnassignedLeads,
   getAllLeads,
@@ -278,4 +333,6 @@ module.exports = {
   markLeadLost,
   categorizeLead,
   updateFunnelStage,
+  logAiChatMessage,
+  scheduleFollowUp,
 };

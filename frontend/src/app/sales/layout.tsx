@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LogOut, Briefcase, IndianRupee } from "lucide-react";
+import { Building2, LogOut, Briefcase, IndianRupee, ReceiptIndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +16,7 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: "My Leads", href: "/sales/leads", icon: Briefcase },
     { name: "Deals & Payments", href: "/sales/deals", icon: IndianRupee },
+    { name: "My Transactions", href: "/sales/transactions", icon: ReceiptIndianRupee },
   ];
 
   return (

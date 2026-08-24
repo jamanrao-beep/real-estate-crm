@@ -8,7 +8,10 @@ const {
   autoAssignLeads,
   markLeadLost,
   categorizeLead,
+  categorizeLead,
   updateFunnelStage,
+  logAiChatMessage,
+  scheduleFollowUp,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
@@ -26,5 +29,7 @@ router.get("/mine", requireAuth, salesOnly, getMyLeads);
 router.patch("/:id/lost", requireAuth, markLeadLost);
 router.patch("/:id/category", requireAuth, categorizeLead);
 router.patch("/:id/stage", requireAuth, updateFunnelStage);
+router.patch("/:id/ai-chat", logAiChatMessage); // AI service can call this without auth for now or with a separate API key
+router.patch("/:id/follow-up", requireAuth, scheduleFollowUp);
 
 module.exports = router;

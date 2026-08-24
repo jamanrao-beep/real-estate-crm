@@ -9,6 +9,7 @@ const cors = require("cors");
 const reportRoutes = require("./routes/reportRoutes");
 const brokerRoutes = require("./routes/brokerRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const { startCronJobs } = require("./jobs/cronJobs");
 
 const app = express();
 app.use(cors());
@@ -25,5 +26,11 @@ app.use("/api/notifications", notificationRoutes);
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
+// Start background jobs
+startCronJobs();
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+
+// trigger restart
+// restart 2
