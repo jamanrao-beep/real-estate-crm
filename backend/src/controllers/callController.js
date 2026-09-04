@@ -6,7 +6,7 @@ const prisma = require("../prisma"); // Adjusted path
 // extend this later to accept a raw durationSecs directly.
 async function logCall(req, res) {
   try {
-    const { leadId, startTime, endTime, notes } = req.body;
+    const { leadId, startTime, endTime, notes, followUpAt, followUpNotes } = req.body;
 
     if (!leadId || !startTime || !endTime) {
       return res.status(400).json({ error: "leadId, startTime, and endTime are required" });
@@ -26,6 +26,9 @@ async function logCall(req, res) {
     const end = new Date(endTime);
     const durationSecs = Math.max(0, Math.round((end - start) / 1000));
 
+    const followUpDate = followUpAt ? new Date(followUpAt) : null;
+    const cleanFollowUpNotes = followUpNotes ? followUpNotes.trim() : null;
+
     const callLog = await prisma.callLog.create({
       data: {
         leadId,
@@ -34,8 +37,21 @@ async function logCall(req, res) {
         endTime: end,
         durationSecs,
         notes,
+        followUpAt: followUpDate,
+        followUpNotes: cleanFollowUpNotes,
       },
     });
+
+    // If a followUp reminder was set, update the active reminder on the Lead
+    if (followUpDate) {
+      await prisma.lead.update({
+        where: { id: leadId },
+        data: {
+          followUpAt: followUpDate,
+          followUpNotes: cleanFollowUpNotes,
+        },
+      });
+    }
 
     return res.status(201).json(callLog);
   } catch (err) {

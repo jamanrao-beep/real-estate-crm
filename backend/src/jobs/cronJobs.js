@@ -19,9 +19,10 @@ function startCronJobs() {
 
       for (const lead of leadsToFollowUp) {
         // Create a notification for the sales person
+        const noteDetail = lead.followUpNotes ? ` | Note: "${lead.followUpNotes}"` : "";
         await prisma.notification.create({
           data: {
-            message: `Reminder: Time to follow up with lead ${lead.name} (${lead.phone})!`,
+            message: `Reminder: Time to follow up with lead ${lead.name} (${lead.phone})${noteDetail}!`,
             userId: lead.assignedToId
           }
         });
@@ -29,7 +30,7 @@ function startCronJobs() {
         // Clear the followUpAt so we don't notify again
         await prisma.lead.update({
           where: { id: lead.id },
-          data: { followUpAt: null }
+          data: { followUpAt: null, followUpNotes: null }
         });
       }
     } catch (err) {

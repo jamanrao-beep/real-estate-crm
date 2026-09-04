@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search } from "lucide-react";
+import { Filter, Search, Clock } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -16,10 +16,28 @@ interface Lead {
   funnelStage: string | null;
   status: string;
   dateReceived: string;
+  followUpAt?: string | null;
+  followUpNotes?: string | null;
   assignedTo: {
     id: string;
     name: string;
   } | null;
+}
+
+function formatFollowUpDate(dateStr: string) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  const isToday = date.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = date.toDateString() === tomorrow.toDateString();
+
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return `Today at ${timeStr}`;
+  if (isTomorrow) return `Tomorrow at ${timeStr}`;
+
+  return `${date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} at ${timeStr}`;
 }
 
 interface SalesPerson {
@@ -181,6 +199,29 @@ export default function AllLeadsPage() {
                         {lead.phone}
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
+
+                      {/* Follow-Up Reminder Pill */}
+                      {lead.followUpAt && (
+                        <div className={`mt-2 p-2 rounded-lg border text-xs flex flex-col gap-0.5 ${
+                          new Date(lead.followUpAt) < new Date()
+                            ? "bg-danger/10 border-danger/30 text-danger"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200"
+                        }`}>
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            <Clock size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>Follow-up: {formatFollowUpDate(lead.followUpAt)}</span>
+                            {new Date(lead.followUpAt) < new Date() && (
+                              <Badge variant="danger" className="text-[9px] py-0 px-1 ml-1">Overdue</Badge>
+                            )}
+                          </div>
+                          {lead.followUpNotes && (
+                            <div className="text-[11px] text-ink/80 flex items-start gap-1">
+                              <span className="font-medium text-ink shrink-0">To ask:</span>
+                              <span className="italic break-words">&ldquo;{lead.followUpNotes}&rdquo;</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 align-top">
                       {lead.assignedTo ? (

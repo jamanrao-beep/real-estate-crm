@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -17,6 +17,24 @@ interface Lead {
   funnelStage: string | null;
   status: string;
   dateReceived: string;
+  followUpAt?: string | null;
+  followUpNotes?: string | null;
+}
+
+function formatFollowUpDate(dateStr: string) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  
+  const isToday = date.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = date.toDateString() === tomorrow.toDateString();
+
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return `Today at ${timeStr}`;
+  if (isTomorrow) return `Tomorrow at ${timeStr}`;
+
+  return `${date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} at ${timeStr}`;
 }
 
 export default function MyLeadsPage() {
@@ -28,6 +46,8 @@ export default function MyLeadsPage() {
   const [callNotes, setCallNotes] = useState("");
   const [callStart, setCallStart] = useState("");
   const [callEnd, setCallEnd] = useState("");
+  const [followUpAt, setFollowUpAt] = useState("");
+  const [followUpNotes, setFollowUpNotes] = useState("");
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -85,16 +105,38 @@ export default function MyLeadsPage() {
         leadId: activeCallLead.id,
         startTime: new Date(callStart).toISOString(),
         endTime: new Date(callEnd).toISOString(),
-        notes: callNotes
+        notes: callNotes,
+        followUpAt: followUpAt ? new Date(followUpAt).toISOString() : null,
+        followUpNotes: followUpNotes || null,
       });
+
+      // Update lead in local state so the table reflects the new reminder immediately
+      setLeads(prev => prev.map(l => l.id === activeCallLead.id ? {
+        ...l,
+        followUpAt: followUpAt ? new Date(followUpAt).toISOString() : l.followUpAt,
+        followUpNotes: followUpAt ? (followUpNotes || null) : l.followUpNotes,
+      } : l));
+
       alert("Call logged successfully!");
       setActiveCallLead(null);
       setCallStart("");
       setCallEnd("");
       setCallNotes("");
+      setFollowUpAt("");
+      setFollowUpNotes("");
     } catch (err: any) {
       console.error("Failed to log call", err);
       alert(err.response?.data?.error || "Failed to log call");
+    }
+  };
+
+  const handleDismissFollowUp = async (leadId: string) => {
+    try {
+      await api.patch(`/leads/${leadId}/follow-up`, { followUpAt: null, followUpNotes: null });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, followUpAt: null, followUpNotes: null } : l));
+    } catch (err) {
+      console.error("Failed to clear follow-up", err);
+      alert("Failed to clear follow-up");
     }
   };
 
@@ -107,6 +149,8 @@ export default function MyLeadsPage() {
     setCallStart(start);
     setCallEnd(end);
     setCallNotes("");
+    setFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    setFollowUpNotes(lead.followUpNotes || "");
     setActiveCallLead(lead);
   };
 
@@ -165,6 +209,39 @@ export default function MyLeadsPage() {
                         {lead.phone}
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
+
+                      {/* Follow-Up Reminder Pill */}
+                      {lead.followUpAt && (
+                        <div className={`mt-2.5 p-2.5 rounded-lg border text-xs flex flex-col gap-1 transition-all ${
+                          new Date(lead.followUpAt) < new Date()
+                            ? "bg-danger/10 border-danger/30 text-danger"
+                            : "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200"
+                        }`}>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="flex items-center gap-1.5 font-semibold">
+                              <Clock size={13} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                              <span>{formatFollowUpDate(lead.followUpAt)}</span>
+                              {new Date(lead.followUpAt) < new Date() && (
+                                <Badge variant="danger" className="text-[9px] py-0 px-1 ml-1">Overdue</Badge>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDismissFollowUp(lead.id)}
+                              className="text-[10px] text-ink-soft hover:text-ink underline ml-2"
+                              title="Mark follow-up done"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          {lead.followUpNotes && (
+                            <div className="text-[11px] text-ink/80 flex items-start gap-1 mt-0.5">
+                              <span className="font-medium text-ink shrink-0">To ask:</span>
+                              <span className="italic break-words">&ldquo;{lead.followUpNotes}&rdquo;</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 align-top w-1/5">
                       <Select
@@ -261,6 +338,41 @@ export default function MyLeadsPage() {
                   placeholder="Discussed pricing, client wants to visit..."
                 />
               </div>
+
+              {/* Follow-up Section */}
+              <div className="border-t border-border pt-4 mt-2 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink">
+                  <Calendar size={14} className="text-accent" />
+                  <span>Next Follow-Up Reminder (Optional)</span>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    Follow-Up Date & Time
+                  </label>
+                  <Input 
+                    type="datetime-local" 
+                    min={new Date().toISOString().slice(0, 16)}
+                    value={followUpAt}
+                    onChange={(e) => setFollowUpAt(e.target.value)}
+                  />
+                  <p className="text-[11px] text-ink-soft mt-0.5">Pick a reminder date & time from today onward</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    What to Ask / Follow-Up Details
+                  </label>
+                  <textarea
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    rows={2}
+                    value={followUpNotes}
+                    onChange={(e) => setFollowUpNotes(e.target.value)}
+                    placeholder="e.g. Ask if loan was approved, confirm site visit timing..."
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 mt-6">
                 <Button type="button" variant="ghost" onClick={() => setActiveCallLead(null)}>Cancel</Button>
                 <Button type="submit">Save Call Record</Button>

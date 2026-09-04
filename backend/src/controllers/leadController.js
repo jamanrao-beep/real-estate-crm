@@ -302,7 +302,7 @@ async function logAiChatMessage(req, res) {
 async function scheduleFollowUp(req, res) {
   try {
     const { id } = req.params;
-    const { followUpAt } = req.body;
+    const { followUpAt, followUpNotes } = req.body;
 
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
@@ -314,7 +314,10 @@ async function scheduleFollowUp(req, res) {
     
     const updatedLead = await prisma.lead.update({
       where: { id },
-      data: { followUpAt: followUpAt ? new Date(followUpAt) : null },
+      data: {
+        followUpAt: followUpAt ? new Date(followUpAt) : null,
+        followUpNotes: followUpAt ? (followUpNotes ? followUpNotes.trim() : null) : null,
+      },
     });
 
     return res.json(updatedLead);
