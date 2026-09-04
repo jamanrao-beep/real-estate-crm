@@ -34,8 +34,24 @@ async function createUser(req, res) {
 async function login(req, res) {
   try {
     const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Support both firstname@bkdcrm.com and fullname/initial alias formats
+    const aliasMap = {
+      "prashants@bkdcrm.com": "prashant@bkdcrm.com",
+      "aartig@bkdcrm.com": "aarti@bkdcrm.com",
+      "sapnaa@bkdcrm.com": "sapna@bkdcrm.com",
+      "manashvib@bkdcrm.com": "manashvi@bkdcrm.com",
+      "pramodsn@bkdcrm.com": "pramod@bkdcrm.com",
+      "bharatj@bkdcrm.com": "bharat@bkdcrm.com",
+    };
+
+    const targetEmail = aliasMap[cleanEmail] || cleanEmail;
+    const user = await prisma.user.findUnique({ where: { email: targetEmail } });
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }

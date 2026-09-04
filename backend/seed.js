@@ -11,39 +11,80 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // Seed Admin
-  let admin = await prisma.user.findUnique({ where: { email: 'admin@crm.com' } });
-  if (!admin) {
-    admin = await prisma.user.create({
-      data: { name: 'System Admin', email: 'admin@crm.com', passwordHash: await bcrypt.hash('admin123', 10), role: 'ADMIN' },
-    });
-    console.log('Admin user created successfully: admin@crm.com / admin123');
-  }
+  const users = [
+    // Admin
+    {
+      name: 'Prashant S',
+      email: 'prashant@bkdcrm.com',
+      password: 'Ps@2026',
+      role: 'ADMIN',
+    },
+    // Sales Persons
+    {
+      name: 'Aarti G',
+      email: 'aarti@bkdcrm.com',
+      password: 'Ag@2026',
+      role: 'SALES_PERSON',
+    },
+    {
+      name: 'Sapna A',
+      email: 'sapna@bkdcrm.com',
+      password: 'Sa@2026',
+      role: 'SALES_PERSON',
+    },
+    {
+      name: 'Manashvi B',
+      email: 'manashvi@bkdcrm.com',
+      password: 'Mb@2026',
+      role: 'SALES_PERSON',
+    },
+    {
+      name: 'Pramod SN',
+      email: 'pramod@bkdcrm.com',
+      password: 'Psn@2026',
+      role: 'SALES_PERSON',
+    },
+    {
+      name: 'Bharat J',
+      email: 'bharat@bkdcrm.com',
+      password: 'Bj@2026',
+      role: 'SALES_PERSON',
+    },
+    // Broker
+    {
+      name: 'Channel Partner',
+      email: 'broker@crm.com',
+      password: 'broker123',
+      role: 'BROKER',
+    },
+  ];
 
-  // Seed 4 Sales Persons
-  for (let i = 1; i <= 4; i++) {
-    const email = `sales${i}@crm.com`;
-    let sales = await prisma.user.findUnique({ where: { email } });
-    if (!sales) {
+  for (const u of users) {
+    const passwordHash = await bcrypt.hash(u.password, 10);
+    const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    if (!existing) {
       await prisma.user.create({
-        data: { 
-          name: `Sales ${i}`, 
-          email, 
-          passwordHash: await bcrypt.hash('sales123', 10), 
-          role: 'SALES_PERSON' 
+        data: {
+          name: u.name,
+          email: u.email,
+          passwordHash,
+          role: u.role,
+          isActive: true,
         },
       });
-      console.log(`Sales user created successfully: ${email} / sales123`);
+      console.log(`Created user: ${u.name} (${u.email}) [${u.role}]`);
+    } else {
+      await prisma.user.update({
+        where: { email: u.email },
+        data: {
+          name: u.name,
+          passwordHash,
+          role: u.role,
+          isActive: true,
+        },
+      });
+      console.log(`Updated user: ${u.name} (${u.email}) [${u.role}]`);
     }
-  }
-
-  // Seed Broker
-  let broker = await prisma.user.findUnique({ where: { email: 'broker@crm.com' } });
-  if (!broker) {
-    broker = await prisma.user.create({
-      data: { name: 'Channel Partner', email: 'broker@crm.com', passwordHash: await bcrypt.hash('broker123', 10), role: 'BROKER' },
-    });
-    console.log('Broker user created successfully: broker@crm.com / broker123');
   }
 }
 
