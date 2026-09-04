@@ -26,7 +26,13 @@ export const metadata: Metadata = {
   title: "BKD CRM | Badri Kedar Developers",
   description: "BKD CRM - Ledger-style CRM for Badri Kedar Developers Sales and Management",
   icons: {
-    icon: "/logo.png",
+    icon: [
+      { url: "/logo.png", type: "image/png" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
 };
 
