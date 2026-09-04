@@ -23,8 +23,11 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Real Estate CRM",
-  description: "Ledger-style CRM for Real Estate Sales and Management",
+  title: "BKD CRM | Badri Kedar Developers",
+  description: "BKD CRM - Ledger-style CRM for Badri Kedar Developers Sales and Management",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 import { AuthProvider } from "@/context/AuthContext";

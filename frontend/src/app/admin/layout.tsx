@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
-import { Building2, LogOut, Users, Inbox, Activity, CreditCard, Bell, Briefcase } from "lucide-react";
+import { LogOut, Users, Inbox, Activity, CreditCard, Bell, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -56,9 +56,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 gap-4">
             <div className="flex">
-              <div className="flex-shrink-0 flex items-center gap-2 text-accent">
-                <Building2 size={24} strokeWidth={1.5} />
-                <span className="font-serif text-lg text-ink font-semibold pr-4">Admin Ledger</span>
+              <div className="flex-shrink-0 flex items-center gap-3 pr-4">
+                <img
+                  src="/logo.png"
+                  alt="BKD Logo"
+                  className="h-9 w-auto rounded object-contain border border-border/40 bg-[#161a22] p-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="font-serif text-base text-ink font-bold leading-tight">BKD CRM</span>
+                  <span className="text-[10px] text-ink-soft uppercase tracking-wider font-medium">Admin Ledger</span>
+                </div>
               </div>
               <nav className="hidden sm:ml-4 sm:flex sm:space-x-2 lg:space-x-4 xl:space-x-8">
                 {navItems.map((item) => {

@@ -6,7 +6,7 @@ import { MessageSquare, X, Send, Bot } from "lucide-react";
 export function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{role: 'user'|'bot', text: string}[]>([
-    { role: 'bot', text: 'Hi! I am ChatMytra, powered by OpenAI. I can help you manage your real estate leads and answer your questions.' }
+    { role: 'bot', text: 'Hi! I am ChatMytra, your BKD CRM assistant. I can help you manage your leads and answer your questions.' }
   ]);
   const [input, setInput] = useState("");
 

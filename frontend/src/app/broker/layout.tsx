@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, LogOut, Briefcase, IndianRupee } from "lucide-react";
+import { LogOut, Briefcase, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function BrokerLayout({ children }: { children: React.ReactNode }) {
@@ -25,9 +25,16 @@ export default function BrokerLayout({ children }: { children: React.ReactNode }
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
-              <div className="flex-shrink-0 flex items-center gap-2 text-accent">
-                <Building2 size={24} strokeWidth={1.5} />
-                <span className="font-serif text-lg text-ink font-semibold">Broker Workspace</span>
+              <div className="flex-shrink-0 flex items-center gap-3 pr-4">
+                <img
+                  src="/logo.png"
+                  alt="BKD Logo"
+                  className="h-9 w-auto rounded object-contain border border-border/40 bg-[#161a22] p-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="font-serif text-base text-ink font-bold leading-tight">BKD CRM</span>
+                  <span className="text-[10px] text-ink-soft uppercase tracking-wider font-medium">Broker Workspace</span>
+                </div>
               </div>
               <nav className="hidden sm:ml-6 sm:flex sm:space-x-4 lg:space-x-8">
                 {navItems.map((item) => {

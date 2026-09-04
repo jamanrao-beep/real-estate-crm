@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Building2, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -32,14 +32,23 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center text-accent">
-          <Building2 size={48} strokeWidth={1.5} />
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <div className="flex justify-center mb-4">
+          <div className="w-36 sm:w-44 rounded-xl overflow-hidden shadow-lg border border-border/60 bg-[#161a22] p-2 transition-transform hover:scale-105 duration-200">
+            <img
+              src="/logo.png"
+              alt="Badri Kedar Developers Logo"
+              className="w-full h-auto object-contain rounded-lg"
+            />
+          </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-serif text-ink">
-          Real Estate CRM
+        <h2 className="text-center text-3xl font-serif text-ink font-bold tracking-tight">
+          BKD CRM
         </h2>
-        <p className="mt-2 text-center text-sm text-ink-soft">
+        <p className="mt-1 text-center text-xs tracking-widest text-accent uppercase font-medium">
+          Badri Kedar Developers
+        </p>
+        <p className="mt-1 text-center text-sm text-ink-soft">
           Sign in to access your ledger
         </p>
       </div>
