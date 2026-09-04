@@ -1,12 +1,12 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "src/index.js",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon server.js",
     "build": "prisma generate",
     "postinstall": "prisma generate",
-    "start": "node src/index.js"
+    "start": "node server.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
