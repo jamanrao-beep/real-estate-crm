@@ -6,7 +6,8 @@
     "dev": "nodemon server.js",
     "build": "prisma generate",
     "postinstall": "prisma generate",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed": "node seed.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

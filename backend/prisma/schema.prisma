@@ -90,6 +90,7 @@ model Lead {
   broker       User?        @relation("BrokerLeads", fields: [brokerId], references: [id])
 
   followUpAt   DateTime?    // Next scheduled follow-up time set by Sales Person
+  followUpNotes String?     // Notes / what to ask on follow-up
 
   dateReceived DateTime     @default(now())
   createdAt    DateTime     @default(now())
@@ -139,6 +140,8 @@ model CallLog {
   endTime       DateTime?
   durationSecs  Int?      // store computed duration for easy reporting
   notes         String?
+  followUpAt    DateTime?
+  followUpNotes String?
 
   createdAt     DateTime  @default(now())
 }
