@@ -118,13 +118,13 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-[210mm] flex flex-col relative print:border-none print:shadow-none print:w-[210mm] print:rounded-none">
           
           {/* Header Action Bar - Hidden on Print */}
-          <div className="sticky top-0 bg-white/90 backdrop-blur border-b border-border p-4 flex justify-between items-center rounded-t-xl z-10 print:hidden shadow-sm">
-            <h3 className="text-lg font-serif text-ink">Receipt of Payment Template</h3>
-            <div className="flex gap-3">
-              <Button variant="outline" type="button" onClick={onClose}>Close</Button>
-              <Button type="button" onClick={handleSave} variant="secondary">Save Data</Button>
-              <Button type="button" onClick={handlePrintPdf}>
-                <Printer size={16} className="mr-2" /> Print PDF
+          <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-border p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 rounded-t-xl z-10 print:hidden shadow-sm">
+            <h3 className="text-base sm:text-lg font-serif text-ink">Receipt of Payment Template</h3>
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+              <Button variant="outline" size="sm" type="button" onClick={onClose}>Close</Button>
+              <Button type="button" size="sm" onClick={handleSave} variant="secondary">Save Data</Button>
+              <Button type="button" size="sm" onClick={handlePrintPdf}>
+                <Printer size={15} className="mr-1.5" /> Print PDF
               </Button>
             </div>
           </div>

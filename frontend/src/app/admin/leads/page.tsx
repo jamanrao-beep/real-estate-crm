@@ -90,21 +90,22 @@ export default function AllLeadsPage() {
   }, [fetchLeads]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-serif text-ink">All Leads Ledger</h1>
-        <p className="text-sm text-ink-soft mt-1">
+        <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">All Leads Ledger</h1>
+        <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
           Master view of all leads across the organization.
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="bg-surface border border-border p-4 rounded-lg flex flex-wrap gap-4 items-end">
-        <div className="w-48">
-          <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">
+      {/* Filters - Responsive Grid */}
+      <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+        <div>
+          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
             Assigned To
           </label>
           <Select
+            className="w-full bg-bg h-10 text-sm"
             value={salesPersonId}
             onChange={(e) => setSalesPersonId(e.target.value)}
           >
@@ -116,22 +117,23 @@ export default function AllLeadsPage() {
             ))}
           </Select>
         </div>
-        <div className="w-40">
-          <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">
+        <div>
+          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
             Category
           </label>
-          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <Select className="w-full bg-bg h-10 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Any Category</option>
-            <option value="HOT">Hot</option>
-            <option value="WARM">Warm</option>
-            <option value="COLD">Cold</option>
+            <option value="HOT">Hot 🔥</option>
+            <option value="WARM">Warm 🌤️</option>
+            <option value="COLD">Cold ❄️</option>
           </Select>
         </div>
-        <div className="w-48">
-          <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">
+        <div>
+          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
             Funnel Stage
           </label>
           <Select
+            className="w-full bg-bg h-10 text-sm"
             value={funnelStage}
             onChange={(e) => setFunnelStage(e.target.value)}
           >
@@ -143,19 +145,23 @@ export default function AllLeadsPage() {
           </Select>
         </div>
         <div>
-          <Button variant="outline" onClick={() => {
-            setSalesPersonId("");
-            setCategory("");
-            setFunnelStage("");
-          }}>
-            <Filter size={16} className="mr-2" />
+          <Button
+            variant="outline"
+            className="w-full h-10 text-xs sm:text-sm justify-center"
+            onClick={() => {
+              setSalesPersonId("");
+              setCategory("");
+              setFunnelStage("");
+            }}
+          >
+            <Filter size={14} className="mr-1.5" />
             Clear Filters
           </Button>
         </div>
       </div>
 
-      {/* Ledger Table */}
-      <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+      {/* DESKTOP TABLE VIEW */}
+      <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -236,7 +242,7 @@ export default function AllLeadsPage() {
                           <Badge
                             variant={
                               lead.category === "HOT"
-                                ? "danger" // We mapped danger to a warm brick color
+                                ? "danger"
                                 : lead.category === "WARM"
                                 ? "warning"
                                 : "default"
@@ -272,6 +278,90 @@ export default function AllLeadsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* MOBILE CARDS VIEW */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft">
+            Loading records...
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-8 text-center flex flex-col items-center justify-center">
+            <Search size={32} className="text-border mb-2" />
+            <p className="font-bold text-ink">No leads found</p>
+            <p className="text-xs text-ink-soft">Try changing your filters.</p>
+          </div>
+        ) : (
+          leads.map((lead) => (
+            <div key={lead.id} className="bg-surface border border-border rounded-xl p-4 shadow-sm space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-ink text-base">{lead.name}</h3>
+                  <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.phone}</div>
+                  <div className="text-xs text-ink-soft">{lead.email}</div>
+                </div>
+                <div className="text-right">
+                  <Badge variant={lead.status === "ACTIVE" ? "success" : "default"} className="text-[10px]">
+                    {lead.status}
+                  </Badge>
+                  <span className="text-[10px] font-mono text-ink-soft block mt-1">
+                    {new Date(lead.dateReceived).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Assignment & Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-xs text-ink-soft">Rep:</span>
+                <span className="text-xs font-semibold text-ink bg-bg px-2 py-0.5 rounded border border-border">
+                  {lead.assignedTo ? lead.assignedTo.name : "Unassigned"}
+                </span>
+                {lead.category && (
+                  <Badge
+                    variant={
+                      lead.category === "HOT"
+                        ? "danger"
+                        : lead.category === "WARM"
+                        ? "warning"
+                        : "default"
+                    }
+                    className="text-[10px]"
+                  >
+                    {lead.category}
+                  </Badge>
+                )}
+                {lead.funnelStage && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {lead.funnelStage.replace(/_/g, " ")}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Follow up box */}
+              {lead.followUpAt && (
+                <div className={`p-2 rounded-lg border text-xs flex flex-col gap-0.5 ${
+                  new Date(lead.followUpAt) < new Date()
+                    ? "bg-danger/10 border-danger/30 text-danger"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200"
+                }`}>
+                  <div className="flex items-center gap-1 font-semibold">
+                    <Clock size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Follow-up: {formatFollowUpDate(lead.followUpAt)}</span>
+                    {new Date(lead.followUpAt) < new Date() && (
+                      <Badge variant="danger" className="text-[8px] py-0 px-1 ml-1">Overdue</Badge>
+                    )}
+                  </div>
+                  {lead.followUpNotes && (
+                    <div className="text-[10px] text-ink/80 italic mt-0.5">
+                      &ldquo;{lead.followUpNotes}&rdquo;
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

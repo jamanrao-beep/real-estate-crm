@@ -113,21 +113,22 @@ export default function DealsPage() {
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(val);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-serif text-ink">Deals & Payments</h1>
-          <p className="text-sm text-ink-soft mt-1">
+          <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Deals & Payments</h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
             Manage your closed deals and log installment payments.
           </p>
         </div>
-        <Button onClick={() => setIsDealModalOpen(true)}>
-          <Plus size={16} className="mr-2" />
+        <Button onClick={() => setIsDealModalOpen(true)} className="h-9 sm:h-10 text-xs sm:text-sm font-semibold justify-center">
+          <Plus size={16} className="mr-1.5" />
           Create New Deal
         </Button>
       </div>
 
-      <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+      {/* DESKTOP TABLE VIEW */}
+      <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -206,6 +207,63 @@ export default function DealsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* MOBILE CARDS VIEW */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft">
+            Loading deals...
+          </div>
+        ) : deals.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-8 text-center text-ink-soft">
+            No deals created yet.
+          </div>
+        ) : (
+          deals.map((deal) => (
+            <div key={deal.id} className="bg-surface border border-border rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
+                <div>
+                  <h3 className="font-bold text-ink text-base">{deal.lead?.name}</h3>
+                  <span className="text-[10px] font-mono text-ink-soft">
+                    Created: {new Date(deal.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono bg-bg border border-border px-2 py-0.5 rounded text-ink-soft">
+                  {deal.transactions.length} payment(s)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 text-xs text-center">
+                <div className="bg-bg p-2 rounded-lg border border-border/60">
+                  <span className="text-[9px] text-ink-soft uppercase tracking-wider block">Agreed</span>
+                  <span className="font-bold text-ink text-xs sm:text-sm">{formatCurrency(deal.dealAmount)}</span>
+                </div>
+                <div className="bg-success/10 p-2 rounded-lg border border-success/30">
+                  <span className="text-[9px] text-success uppercase tracking-wider block font-semibold">Paid</span>
+                  <span className="font-bold font-mono text-success text-xs sm:text-sm">{formatCurrency(deal.totalPaid)}</span>
+                </div>
+                <div className="bg-warning/10 p-2 rounded-lg border border-warning/30">
+                  <span className="text-[9px] text-warning uppercase tracking-wider block font-semibold">Due</span>
+                  <span className="font-bold font-mono text-warning text-xs sm:text-sm">{formatCurrency(deal.runningBalance)}</span>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center h-10 text-xs font-semibold"
+                  onClick={() => setActivePaymentDeal(deal)}
+                  disabled={deal.runningBalance <= 0}
+                >
+                  <ReceiptIndianRupee size={14} className="mr-1.5 text-accent" />
+                  {deal.runningBalance <= 0 ? "Deal Fully Paid" : "Log Payment Installment"}
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Create Deal Modal */}

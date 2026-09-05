@@ -117,7 +117,8 @@ export default function MyLeadsPage() {
       </div>
 
       <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-bg/50">
@@ -206,6 +207,74 @@ export default function MyLeadsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden divide-y divide-border">
+          {isLoading ? (
+            <div className="p-8 text-center text-ink-soft">Loading your leads...</div>
+          ) : leads.length === 0 ? (
+            <div className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+              <Search size={16} /> No leads assigned to you right now.
+            </div>
+          ) : (
+            leads.map((lead) => (
+              <div key={lead.id} className={`p-4 space-y-3 ${lead.status === 'LOST' ? 'bg-bg/40 opacity-70' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-ink text-base">{lead.name}</span>
+                      {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
+                    </div>
+                    <div className="font-mono text-sm text-ink-soft mt-0.5">{lead.phone}</div>
+                    {lead.email && <div className="text-xs text-ink-soft/80">{lead.email}</div>}
+                  </div>
+                  {lead.status !== "LOST" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger hover:bg-danger/10 hover:text-danger h-8 px-2 text-xs"
+                      onClick={() => markLost(lead.id)}
+                    >
+                      <XCircle size={14} className="mr-1" />
+                      Lost
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider font-semibold text-ink-soft mb-1 block">Category</label>
+                    <Select
+                      className="w-full text-xs h-9"
+                      value={lead.category || ""}
+                      onChange={(e) => updateCategory(lead.id, e.target.value)}
+                      disabled={lead.status === "LOST"}
+                    >
+                      <option value="" disabled>Set Category</option>
+                      <option value="HOT">Hot</option>
+                      <option value="WARM">Warm</option>
+                      <option value="COLD">Cold</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider font-semibold text-ink-soft mb-1 block">Stage</label>
+                    <Select
+                      className="w-full text-xs h-9"
+                      value={lead.funnelStage || ""}
+                      onChange={(e) => updateStage(lead.id, e.target.value)}
+                      disabled={lead.status === "LOST"}
+                    >
+                      <option value="" disabled>Set Stage</option>
+                      <option value="INTERESTED">Interested</option>
+                      <option value="SITE_VISIT_DONE">Site Visit Done</option>
+                      <option value="DEAL_CLOSED">Deal Closed</option>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

@@ -155,17 +155,18 @@ export default function MyLeadsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-serif text-ink">My Leads Workspace</h1>
-          <p className="text-sm text-ink-soft mt-1">
+          <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">My Leads Workspace</h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
             Manage your assigned leads, update progress, and log interactions.
           </p>
         </div>
       </div>
 
-      <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+      {/* DESKTOP TABLE VIEW (hidden on mobile, visible md and up) */}
+      <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -300,15 +301,156 @@ export default function MyLeadsPage() {
         </div>
       </div>
 
-      {/* Call Logging Modal */}
+      {/* MOBILE CARDS VIEW (visible on mobile, hidden md and up) */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft">
+            Loading your leads...
+          </div>
+        ) : leads.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-8 text-center text-ink-soft flex flex-col items-center justify-center gap-2">
+            <Search size={24} className="text-border" />
+            <p className="font-medium text-ink">No leads assigned</p>
+            <p className="text-xs">No active leads assigned to you right now.</p>
+          </div>
+        ) : (
+          leads.map((lead) => {
+            const cleanPhone = lead.phone ? lead.phone.replace(/[^0-9]/g, "") : "";
+            return (
+              <div
+                key={lead.id}
+                className={`bg-surface border border-border rounded-xl p-4 shadow-sm space-y-3 transition-all ${
+                  lead.status === "LOST" ? "opacity-70 bg-bg/60" : ""
+                }`}
+              >
+                {/* Header: Name + Status Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-ink text-base flex items-center gap-2">
+                      {lead.name}
+                      {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
+                    </div>
+                    <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.email}</div>
+                  </div>
+
+                  {/* Direct Phone & WhatsApp Tap Targets */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {lead.phone && (
+                      <a
+                        href={`tel:${lead.phone}`}
+                        className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent hover:text-white transition-colors flex items-center justify-center"
+                        title="Call directly"
+                      >
+                        <Phone size={16} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Follow-up reminder box */}
+                {lead.followUpAt && (
+                  <div
+                    className={`p-2.5 rounded-lg border text-xs flex flex-col gap-1 ${
+                      new Date(lead.followUpAt) < new Date()
+                        ? "bg-danger/10 border-danger/30 text-danger"
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        <Clock size={13} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                        <span>{formatFollowUpDate(lead.followUpAt)}</span>
+                        {new Date(lead.followUpAt) < new Date() && (
+                          <Badge variant="danger" className="text-[9px] py-0 px-1 ml-1">Overdue</Badge>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDismissFollowUp(lead.id)}
+                        className="text-[10px] text-ink-soft hover:text-ink underline ml-2"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {lead.followUpNotes && (
+                      <div className="text-[11px] text-ink/80 flex items-start gap-1 mt-0.5">
+                        <span className="font-medium text-ink shrink-0">To ask:</span>
+                        <span className="italic break-words">&ldquo;{lead.followUpNotes}&rdquo;</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dropdowns for Mobile */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Category</label>
+                    <Select
+                      className="w-full text-xs h-9 bg-bg"
+                      value={lead.category || ""}
+                      onChange={(e) => updateCategory(lead.id, e.target.value)}
+                      disabled={lead.status === "LOST"}
+                    >
+                      <option value="" disabled>Category</option>
+                      <option value="HOT">Hot 🔥</option>
+                      <option value="WARM">Warm 🌤️</option>
+                      <option value="COLD">Cold ❄️</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Stage</label>
+                    <Select
+                      className="w-full text-xs h-9 bg-bg"
+                      value={lead.funnelStage || ""}
+                      onChange={(e) => updateStage(lead.id, e.target.value)}
+                      disabled={lead.status === "LOST"}
+                    >
+                      <option value="" disabled>Stage</option>
+                      <option value="INTERESTED">Interested</option>
+                      <option value="SITE_VISIT_DONE">Site Visit Done</option>
+                      <option value="DEAL_CLOSED">Deal Closed</option>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Card Action Buttons */}
+                <div className="flex gap-2 pt-1 border-t border-border/60">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 justify-center py-2 h-9 text-xs font-semibold"
+                    onClick={() => openCallModal(lead)}
+                    disabled={lead.status === "LOST"}
+                  >
+                    <Phone size={14} className="mr-1.5 text-accent" />
+                    Log Call
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-3 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+                    onClick={() => markLost(lead.id)}
+                    disabled={lead.status === "LOST"}
+                  >
+                    <XCircle size={14} className="mr-1" />
+                    Lost
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Call Logging Modal - Fully Responsive */}
       {activeCallLead && (
-        <div className="fixed inset-0 bg-ink/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-lg shadow-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-serif text-ink mb-1">Log Call</h3>
-            <p className="text-sm text-ink-soft mb-6">Record interaction with {activeCallLead.name}</p>
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-serif text-ink font-bold">Log Call</h3>
+            <p className="text-xs sm:text-sm text-ink-soft mb-4">Record interaction with <strong className="text-ink">{activeCallLead.name}</strong></p>
             
-            <form onSubmit={handleLogCall} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleLogCall} className="space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Start Time</label>
                   <Input 
@@ -316,6 +458,7 @@ export default function MyLeadsPage() {
                     required 
                     value={callStart}
                     onChange={(e) => setCallStart(e.target.value)}
+                    className="h-10 text-xs sm:text-sm"
                   />
                 </div>
                 <div>
@@ -325,14 +468,15 @@ export default function MyLeadsPage() {
                     required 
                     value={callEnd}
                     onChange={(e) => setCallEnd(e.target.value)}
+                    className="h-10 text-xs sm:text-sm"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Notes (Optional)</label>
                 <textarea
-                  className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  rows={3}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  rows={2}
                   value={callNotes}
                   onChange={(e) => setCallNotes(e.target.value)}
                   placeholder="Discussed pricing, client wants to visit..."
@@ -340,7 +484,7 @@ export default function MyLeadsPage() {
               </div>
 
               {/* Follow-up Section */}
-              <div className="border-t border-border pt-4 mt-2 space-y-3">
+              <div className="border-t border-border pt-3 mt-2 space-y-2.5">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink">
                   <Calendar size={14} className="text-accent" />
                   <span>Next Follow-Up Reminder (Optional)</span>
@@ -355,8 +499,9 @@ export default function MyLeadsPage() {
                     min={new Date().toISOString().slice(0, 16)}
                     value={followUpAt}
                     onChange={(e) => setFollowUpAt(e.target.value)}
+                    className="h-10 text-xs sm:text-sm"
                   />
-                  <p className="text-[11px] text-ink-soft mt-0.5">Pick a reminder date & time from today onward</p>
+                  <p className="text-[10px] text-ink-soft mt-0.5">Pick a reminder date & time from today onward</p>
                 </div>
 
                 <div>
@@ -364,7 +509,7 @@ export default function MyLeadsPage() {
                     What to Ask / Follow-Up Details
                   </label>
                   <textarea
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     rows={2}
                     value={followUpNotes}
                     onChange={(e) => setFollowUpNotes(e.target.value)}
@@ -373,9 +518,9 @@ export default function MyLeadsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6">
-                <Button type="button" variant="ghost" onClick={() => setActiveCallLead(null)}>Cancel</Button>
-                <Button type="submit">Save Call Record</Button>
+              <div className="flex justify-end gap-2 sm:gap-3 pt-3 border-t border-border">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setActiveCallLead(null)} className="h-10 px-4">Cancel</Button>
+                <Button type="submit" size="sm" className="h-10 px-4 font-semibold">Save Call Record</Button>
               </div>
             </form>
           </div>

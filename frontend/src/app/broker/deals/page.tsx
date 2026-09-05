@@ -45,7 +45,8 @@ export default function BrokerDealsPage() {
       </div>
 
       <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-bg/50">
@@ -99,6 +100,35 @@ export default function BrokerDealsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden divide-y divide-border">
+          {isLoading ? (
+            <div className="p-8 text-center text-ink-soft">Loading deals...</div>
+          ) : closedLeads.length === 0 ? (
+            <div className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+              <Search size={16} /> No closed deals yet.
+            </div>
+          ) : (
+            closedLeads.map((lead) => (
+              <div key={lead.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-ink text-base">{lead.name}</h3>
+                    <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.phone}</div>
+                  </div>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-success/10 text-success border border-success/20">
+                    Closed
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-border/50 text-ink-soft">
+                  <span>Submitted: {new Date(lead.dateReceived).toLocaleDateString()}</span>
+                  <span className="font-medium text-success">Closed: {new Date(lead.updatedAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

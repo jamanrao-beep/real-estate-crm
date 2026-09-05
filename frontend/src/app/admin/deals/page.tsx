@@ -72,16 +72,16 @@ export default function AdminDealsPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-500">
-      
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-serif text-ink tracking-tight mb-2">Finalized Deals</h1>
-          <p className="text-ink-soft">Manage closed deals, assign plot markers, and generate final PDF templates.</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Finalized Deals</h1>
+        <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+          Manage closed deals, assign plot markers, and generate final PDF templates.
+        </p>
       </div>
 
-      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+      {/* DESKTOP TABLE VIEW */}
+      <div className="hidden md:block bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-bg uppercase text-xs font-semibold text-ink-soft tracking-wider border-b border-border">
@@ -151,6 +151,67 @@ export default function AdminDealsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* MOBILE CARDS VIEW */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft">
+            Loading deals...
+          </div>
+        ) : deals.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-8 text-center text-ink-soft">
+            No finalized deals found.
+          </div>
+        ) : (
+          deals.map((deal) => (
+            <div key={deal.id} className="bg-surface border border-border rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
+                <div>
+                  <h3 className="font-bold text-ink text-base">{deal.lead?.name}</h3>
+                  <span className="text-[10px] font-mono text-ink-soft">
+                    Closed: {new Date(deal.createdAt).toLocaleDateString('en-GB')}
+                  </span>
+                </div>
+                <Badge variant={deal.plotNumber ? "outline" : "default"} className="text-[10px]">
+                  {deal.plotNumber ? `Plot: ${deal.plotNumber}` : "No Plot"}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-bg p-2.5 rounded-lg border border-border/60">
+                  <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Agreed Value</span>
+                  <span className="font-bold font-serif text-ink text-sm">{formatCurrency(deal.dealAmount)}</span>
+                </div>
+                <div className="bg-warning/10 p-2.5 rounded-lg border border-warning/30">
+                  <span className="text-[10px] text-warning uppercase tracking-wider block font-semibold">Balance Due</span>
+                  <span className="font-bold font-mono text-warning text-sm">{formatCurrency(deal.runningBalance)}</span>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <Button
+                  variant={deal.plotNumber ? "primary" : "outline"}
+                  size="sm"
+                  className="w-full justify-center h-10 text-xs font-semibold"
+                  onClick={() => openTemplateModal(deal)}
+                >
+                  {deal.plotNumber ? (
+                    <>
+                      <Printer size={14} className="mr-1.5" />
+                      View / Print Receipt Template
+                    </>
+                  ) : (
+                    <>
+                      <MapPin size={14} className="mr-1.5 text-accent" />
+                      Fill Template Details
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {activeTemplateDeal && (

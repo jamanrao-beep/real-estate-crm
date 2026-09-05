@@ -68,30 +68,30 @@ export default function PerformanceDashboard() {
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(val);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-serif text-ink">Performance Dashboard</h1>
-          <p className="text-sm text-ink-soft mt-1">
+          <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Performance Dashboard</h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
             Monthly metrics across the sales team.
           </p>
         </div>
-        <div className="flex items-center gap-4 bg-surface p-2 border border-border rounded-lg">
+        <div className="flex flex-wrap items-center gap-2 bg-surface p-2 border border-border rounded-xl shadow-sm">
           <Select
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="w-32 bg-bg"
+            className="w-32 sm:w-36 bg-bg h-9 sm:h-10 text-xs sm:text-sm"
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option key={m} value={m}>
-                {new Date(0, m - 1).toLocaleString("default", { month: "long" })}
+                {new Date(0, m - 1).toLocaleString("default", { month: "short" })}
               </option>
             ))}
           </Select>
           <Select
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            className="w-28 bg-bg"
+            className="w-24 sm:w-28 bg-bg h-9 sm:h-10 text-xs sm:text-sm"
           >
             {[2024, 2025, 2026].map((y) => (
               <option key={y} value={y}>
@@ -101,26 +101,29 @@ export default function PerformanceDashboard() {
           </Select>
           <Button
             variant="ghost"
+            size="sm"
             onClick={fetchPerformance}
             disabled={isLoading}
-            className="px-2"
+            className="h-9 sm:h-10 px-2.5"
             title="Refresh"
           >
-            <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={handleDownloadCSV}
             disabled={isLoading}
-            className="ml-2"
+            className="h-9 sm:h-10 text-xs sm:text-sm flex items-center gap-1.5 font-medium"
           >
-            <FileDown size={16} className="mr-2" />
-            Export CSV
+            <FileDown size={14} />
+            <span className="hidden sm:inline">Export</span> CSV
           </Button>
         </div>
       </div>
 
-      <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
+      {/* DESKTOP TABLE VIEW */}
+      <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -243,6 +246,79 @@ export default function PerformanceDashboard() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* MOBILE SCORECARD VIEW */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft">
+            Computing metrics...
+          </div>
+        ) : results.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-8 text-center text-ink-soft">
+            No sales team data for this month.
+          </div>
+        ) : (
+          results.map((r) => {
+            const conversionRate = r.totalLeadsReceived
+              ? Math.round((r.totalLeadsConverted / r.totalLeadsReceived) * 100)
+              : 0;
+            return (
+              <div key={r.salesPerson.id} className="bg-surface border border-border rounded-xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <h3 className="font-bold text-ink text-base">{r.salesPerson.name}</h3>
+                  <Badge variant="outline" className="text-xs font-mono font-bold text-accent">
+                    {conversionRate}% Conv.
+                  </Badge>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-bg p-2.5 rounded-lg border border-border/60">
+                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Leads</span>
+                    <span className="font-bold text-ink text-sm">{r.totalLeadsReceived} Rec / {r.totalLeadsConverted} Won</span>
+                  </div>
+                  <div className="bg-bg p-2.5 rounded-lg border border-border/60">
+                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Visits & Calls</span>
+                    <span className="font-bold text-ink text-sm">{r.siteVisitsDone} Visits / {r.numberOfCalls} Calls</span>
+                  </div>
+                  <div className="bg-bg p-2.5 rounded-lg border border-border/60">
+                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Sales Value</span>
+                    <span className="font-bold text-ink text-sm">{formatCurrency(r.totalSalesValueClosed)}</span>
+                  </div>
+                  <div className="bg-success/10 p-2.5 rounded-lg border border-success/30">
+                    <span className="text-[10px] text-success uppercase tracking-wider block font-semibold">Collected</span>
+                    <span className="font-bold text-success text-sm">{formatCurrency(r.totalPaymentsCollected)}</span>
+                  </div>
+                </div>
+
+                {/* Category & Funnel Chips */}
+                <div className="pt-1 flex flex-wrap gap-1">
+                  {r.categoryBreakdown.map((cb) => (
+                    <Badge
+                      key={cb.category}
+                      variant={
+                        cb.category === "HOT"
+                          ? "danger"
+                          : cb.category === "WARM"
+                          ? "warning"
+                          : "default"
+                      }
+                      className="text-[9px]"
+                    >
+                      {cb.count} {cb.category}
+                    </Badge>
+                  ))}
+                  {r.funnelBreakdown.map((fb) => (
+                    <Badge key={fb.stage} variant="outline" className="text-[9px] font-mono">
+                      {fb.count} {fb.stage.replace(/_/g, " ")}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

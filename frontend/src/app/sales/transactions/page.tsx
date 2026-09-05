@@ -114,7 +114,8 @@ export default function MyTransactions() {
       </div>
 
       <div className="bg-surface border border-border rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-bg/50">
@@ -211,6 +212,71 @@ export default function MyTransactions() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View */}
+        <div className="md:hidden divide-y divide-border">
+          {isLoading ? (
+            <div className="p-8 text-center text-ink-soft">Loading ledger...</div>
+          ) : transactions.length === 0 ? (
+            <div className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+              <Search size={16} /> No transactions logged yet.
+            </div>
+          ) : (
+            transactions.map((tx) => (
+              <div key={tx.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium text-ink text-base">{tx.deal?.lead?.name || "Unknown Lead"}</h3>
+                    <p className="text-xs text-ink-soft mt-0.5">
+                      Total Deal: {tx.deal ? formatCurrency(tx.deal.dealAmount) : "-"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-success text-base">
+                      {formatCurrency(tx.amountPaid)}
+                    </div>
+                    <span className="text-[11px] text-ink-soft block mt-0.5 font-mono">
+                      {new Date(tx.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{tx.paymentMode}</Badge>
+                    {tx.referenceNumber && (
+                      <span className="font-mono text-ink-soft text-[11px] truncate max-w-[120px]">
+                        Ref: {tx.referenceNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {tx.isLocked ? (
+                      <Badge variant="default" className="flex items-center gap-1 bg-bg border border-border text-[11px]">
+                        <Lock size={10} /> Locked
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" className="flex items-center gap-1 text-[11px]">
+                        <Unlock size={10} /> Unlocked
+                      </Badge>
+                    )}
+                    {!tx.isLocked && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => openEditModal(tx)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Edit2 size={12} className="mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

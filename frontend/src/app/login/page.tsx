@@ -31,30 +31,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-bg flex flex-col justify-center py-8 px-4 sm:py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="flex justify-center mb-4">
-          <div className="w-36 sm:w-44 rounded-xl overflow-hidden shadow-lg border border-border/60 bg-[#161a22] p-2 transition-transform hover:scale-105 duration-200">
+        <div className="flex justify-center mb-3">
+          <div className="w-48 sm:w-56 rounded-2xl overflow-hidden shadow-lg border border-border/40 bg-white p-3 transition-transform hover:scale-105 duration-200">
             <img
               src="/logo.png"
               alt="Badri Kedar Developers Logo"
-              className="w-full h-auto object-contain rounded-lg"
+              className="w-full h-auto object-contain"
             />
           </div>
         </div>
-        <h2 className="text-center text-3xl font-serif text-ink font-bold tracking-tight">
+        <h2 className="text-center text-2xl sm:text-3xl font-serif text-ink font-bold tracking-tight">
           BKD CRM
         </h2>
-        <p className="mt-1 text-center text-xs tracking-widest text-accent uppercase font-medium">
+        <p className="mt-1 text-center text-xs tracking-widest text-accent uppercase font-semibold">
           Badri Kedar Developers
         </p>
-        <p className="mt-1 text-center text-sm text-ink-soft">
-          Sign in to access your ledger
+        <p className="mt-1 text-center text-xs sm:text-sm text-ink-soft">
+          Sign in to access your ledger workspace
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-surface py-8 px-4 border border-border sm:rounded-lg sm:px-10">
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-surface py-6 px-4 border border-border rounded-xl shadow-sm sm:py-8 sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-danger/10 border border-danger/20 rounded-md p-3 flex items-start gap-2 text-sm text-danger">
