@@ -17,6 +17,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/webhooks", webhookRoutes);
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/calls", callRoutes);
 app.use("/api", paymentRoutes);
