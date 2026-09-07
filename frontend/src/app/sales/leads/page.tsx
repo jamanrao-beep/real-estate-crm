@@ -91,11 +91,11 @@ export default function MyLeadsPage() {
   const markLost = async (id: string) => {
     if (!confirm("Are you sure you want to mark this lead as LOST?")) return;
     try {
-      await api.patch(`/leads/${id}/lost`);
-      setLeads(leads.map(l => l.id === id ? { ...l, status: "LOST" } : l));
-    } catch (err) {
+      await api.patch(`/leads/${id}/lost`, {});
+      setLeads(leads.map(l => l.id === id ? { ...l, status: "LOST", funnelStage: "LOST" } : l));
+    } catch (err: any) {
       console.error("Failed to mark lost", err);
-      alert("Failed to mark lead as lost");
+      alert(err.response?.data?.error || "Failed to mark lead as lost");
     }
   };
 
