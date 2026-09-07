@@ -5,8 +5,9 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { RefreshCw, Users, Check, Inbox, FileSpreadsheet, Upload } from "lucide-react";
+import { RefreshCw, Users, Check, Inbox, FileSpreadsheet, Upload, Bot } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
+import WhatsAppChatModal from "@/components/WhatsAppChatModal";
 
 interface Lead {
   id: string;
@@ -15,6 +16,7 @@ interface Lead {
   email: string;
   sourceForm: string;
   dateReceived: string;
+  aiChatHistory?: any;
 }
 
 interface SalesPerson {
@@ -30,6 +32,7 @@ export default function UnassignedLeadsPage() {
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -215,7 +218,19 @@ export default function UnassignedLeadsPage() {
                       <Badge variant="outline">{lead.sourceForm || "Website / Form"}</Badge>
                     </td>
                     <td className="p-4 align-top text-right">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setSelectedWhatsAppLead(lead)}
+                          className="h-9 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"
+                        >
+                          <Bot size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>WhatsApp</span>
+                          {Array.isArray(lead.aiChatHistory) && lead.aiChatHistory.length > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          )}
+                        </Button>
                         <Select
                           className="w-48 bg-bg text-sm"
                           defaultValue=""
@@ -278,29 +293,54 @@ export default function UnassignedLeadsPage() {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-border/60">
-                <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1.5">
-                  Assign Lead To:
-                </label>
-                <Select
-                  className="w-full bg-bg h-10 text-sm"
-                  defaultValue=""
-                  onChange={(e) => handleManualAssign(lead.id, e.target.value)}
+              <div className="pt-2 border-t border-border/60 space-y-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSelectedWhatsAppLead(lead)}
+                  className="w-full h-9 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 font-semibold"
                 >
-                  <option value="" disabled>
-                    Select Sales Rep...
-                  </option>
-                  {salesTeam.map((rep) => (
-                    <option key={rep.id} value={rep.id}>
-                      {rep.name}
+                  <Bot size={14} />
+                  <span>WhatsApp Bot & Chat</span>
+                </Button>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1.5">
+                    Assign Lead To:
+                  </label>
+                  <Select
+                    className="w-full bg-bg h-10 text-sm"
+                    defaultValue=""
+                    onChange={(e) => handleManualAssign(lead.id, e.target.value)}
+                  >
+                    <option value="" disabled>
+                      Select Sales Rep...
                     </option>
-                  ))}
-                </Select>
+                    {salesTeam.map((rep) => (
+                      <option key={rep.id} value={rep.id}>
+                        {rep.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* WhatsApp Bot / Chat Modal */}
+      <WhatsAppChatModal
+        isOpen={!!selectedWhatsAppLead}
+        onClose={() => setSelectedWhatsAppLead(null)}
+        lead={selectedWhatsAppLead}
+        onLeadUpdated={(updatedLead) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+          );
+          setSelectedWhatsAppLead((prev) => (prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev));
+        }}
+      />
     </div>
   );
 }

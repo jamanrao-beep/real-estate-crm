@@ -63,7 +63,7 @@ async function fetchAndStoreLead(leadgenId, formId) {
   const phone = getField("phone_number") || getField("phone");
   const email = getField("email");
 
-  await prisma.lead.create({
+  const newLead = await prisma.lead.create({
     data: {
       name,
       phone: phone || "",
@@ -76,6 +76,12 @@ async function fetchAndStoreLead(leadgenId, formId) {
   });
 
   console.log(`New lead created from Facebook: ${name}`);
+
+  // Trigger automated WhatsApp greeting via ChatMitra Bot
+  const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+  sendChatMitraLeadGreeting(newLead).catch((err) =>
+    console.error(`[Facebook Webhook] WhatsApp greeting error for ${name}:`, err.message)
+  );
 }
 
 module.exports = { verifyWebhook, receiveLeadEvent }; 

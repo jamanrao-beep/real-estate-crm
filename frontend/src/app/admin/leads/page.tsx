@@ -5,8 +5,9 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check, Upload } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, Bot, MessageCircle } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
+import WhatsAppChatModal from "@/components/WhatsAppChatModal";
 
 interface Lead {
   id: string;
@@ -19,6 +20,7 @@ interface Lead {
   dateReceived: string;
   followUpAt?: string | null;
   followUpNotes?: string | null;
+  aiChatHistory?: any;
   assignedTo: {
     id: string;
     name: string;
@@ -53,6 +55,7 @@ export default function AllLeadsPage() {
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
 
   // Filters
   const [salesPersonId, setSalesPersonId] = useState("");
@@ -238,6 +241,9 @@ export default function AllLeadsPage() {
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
                   Status
                 </th>
+                <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
+                  WhatsApp Bot
+                </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider text-right">
                   Date
                 </th>
@@ -246,13 +252,13 @@ export default function AllLeadsPage() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft">
                     Loading records...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
                     <Search size={16} /> No leads found matching criteria.
                   </td>
                 </tr>
@@ -326,6 +332,20 @@ export default function AllLeadsPage() {
                       >
                         {lead.status}
                       </Badge>
+                    </td>
+                    <td className="p-4 align-top">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setSelectedWhatsAppLead(lead)}
+                        className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"
+                      >
+                        <Bot size={13} className="text-emerald-600 dark:text-emerald-400" />
+                        <span>Chat / Bot</span>
+                        {Array.isArray(lead.aiChatHistory) && lead.aiChatHistory.length > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        )}
+                      </Button>
                     </td>
                     <td className="p-4 align-top text-right">
                       <div className="font-mono text-sm text-ink">
@@ -419,10 +439,36 @@ export default function AllLeadsPage() {
                   )}
                 </div>
               )}
+
+              {/* Action Buttons for Mobile */}
+              <div className="pt-2 border-t border-border/60 flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSelectedWhatsAppLead(lead)}
+                  className="w-full h-9 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 font-semibold"
+                >
+                  <Bot size={14} />
+                  <span>WhatsApp Bot & Chat</span>
+                </Button>
+              </div>
             </div>
           ))
         )}
       </div>
+
+      {/* WhatsApp Bot / Chat Modal */}
+      <WhatsAppChatModal
+        isOpen={!!selectedWhatsAppLead}
+        onClose={() => setSelectedWhatsAppLead(null)}
+        lead={selectedWhatsAppLead}
+        onLeadUpdated={(updatedLead) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+          );
+          setSelectedWhatsAppLead((prev) => (prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev));
+        }}
+      />
     </div>
   );
 }

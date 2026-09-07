@@ -14,6 +14,7 @@ const {
   syncSheetLeads,
   receiveWebhookLead,
   importBulkLeads,
+  sendWhatsAppToLead,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
@@ -21,6 +22,9 @@ const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);
 router.post("/webhook", receiveWebhookLead);
 router.post("/import-bulk", requireAuth, adminOnly, importBulkLeads);
+
+// WhatsApp Direct Bot Greeting
+router.post("/:id/send-whatsapp", requireAuth, sendWhatsAppToLead);
 
 // Admin-only endpoints
 router.get("/unassigned", requireAuth, adminOnly, getUnassignedLeads);
@@ -40,3 +44,4 @@ router.patch("/:id/ai-chat", logAiChatMessage); // AI service can call this with
 router.patch("/:id/follow-up", requireAuth, scheduleFollowUp);
 
 module.exports = router;
+

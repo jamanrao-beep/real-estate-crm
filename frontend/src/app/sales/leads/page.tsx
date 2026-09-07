@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock, Calendar } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar, Bot } from "lucide-react";
+import WhatsAppChatModal from "@/components/WhatsAppChatModal";
 
 interface Lead {
   id: string;
@@ -19,6 +20,7 @@ interface Lead {
   dateReceived: string;
   followUpAt?: string | null;
   followUpNotes?: string | null;
+  aiChatHistory?: any;
 }
 
 function formatFollowUpDate(dateStr: string) {
@@ -48,6 +50,7 @@ export default function MyLeadsPage() {
   const [callEnd, setCallEnd] = useState("");
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
+  const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -273,6 +276,18 @@ export default function MyLeadsPage() {
                     <td className="p-4 align-top text-right">
                       <div className="flex justify-end gap-2">
                         <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setSelectedWhatsAppLead(lead)}
+                          className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"
+                        >
+                          <Bot size={13} className="text-emerald-600 dark:text-emerald-400" />
+                          <span>WhatsApp</span>
+                          {Array.isArray(lead.aiChatHistory) && lead.aiChatHistory.length > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          )}
+                        </Button>
+                        <Button
                           variant="outline"
                           size="sm"
                           onClick={() => openCallModal(lead)}
@@ -416,6 +431,15 @@ export default function MyLeadsPage() {
                 {/* Card Action Buttons */}
                 <div className="flex gap-2 pt-1 border-t border-border/60">
                   <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSelectedWhatsAppLead(lead)}
+                    className="h-9 px-3 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1 font-semibold"
+                  >
+                    <Bot size={14} />
+                    <span>WhatsApp</span>
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
                     className="flex-1 justify-center py-2 h-9 text-xs font-semibold"
@@ -526,6 +550,19 @@ export default function MyLeadsPage() {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Bot / Chat Modal */}
+      <WhatsAppChatModal
+        isOpen={!!selectedWhatsAppLead}
+        onClose={() => setSelectedWhatsAppLead(null)}
+        lead={selectedWhatsAppLead}
+        onLeadUpdated={(updatedLead) => {
+          setLeads((prev) =>
+            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+          );
+          setSelectedWhatsAppLead((prev) => (prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev));
+        }}
+      />
     </div>
   );
 }

@@ -131,7 +131,7 @@ async function syncGoogleSheetLeads() {
       }
 
       // Create new lead in unassigned inbox
-      await prisma.lead.create({
+      const newLead = await prisma.lead.create({
         data: {
           name,
           phone: phone || "N/A",
@@ -149,6 +149,12 @@ async function syncGoogleSheetLeads() {
 
       synced++;
       console.log(`[GoogleSheetSync] Imported new lead: ${name} (${phone})`);
+
+      // Trigger automated WhatsApp greeting via ChatMitra Bot
+      const { sendChatMitraLeadGreeting } = require("./chatMitraService");
+      sendChatMitraLeadGreeting(newLead).catch(err =>
+        console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
+      );
     }
 
     return {

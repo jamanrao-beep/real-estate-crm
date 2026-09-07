@@ -371,6 +371,13 @@ async function receiveWebhookLead(req, res) {
     });
 
     console.log(`[Webhook] Created new lead: ${newLead.name} (${newLead.phone})`);
+
+    // Trigger automated WhatsApp greeting via ChatMitra Bot
+    const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+    sendChatMitraLeadGreeting(newLead).catch((err) =>
+      console.error(`[Webhook] WhatsApp greeting error for ${newLead.name}:`, err.message)
+    );
+
     return res.status(201).json({ success: true, lead: newLead });
   } catch (err) {
     console.error("Webhook lead creation failed:", err);
@@ -378,10 +385,36 @@ async function receiveWebhookLead(req, res) {
   }
 }
 
+// POST /api/leads/:id/send-whatsapp (Manual trigger from CRM)
+async function sendWhatsAppToLead(req, res) {
+  try {
+    const { id } = req.params;
+    const { message } = req.body; // optional custom message text
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    const { sendChatMitraLeadGreeting, sendCustomWhatsAppMessage } = require("../services/chatMitraService");
+
+    let result;
+    if (message && message.trim()) {
+      result = await sendCustomWhatsAppMessage(lead.phone, message.trim(), lead.id, req.user?.name || "Agent");
+    } else {
+      result = await sendChatMitraLeadGreeting(lead);
+    }
+
+    const updatedLead = await prisma.lead.findUnique({ where: { id } });
+    return res.json({ success: true, result, lead: updatedLead });
+  } catch (err) {
+    console.error("Failed to send WhatsApp message:", err);
+    return res.status(500).json({ error: "Failed to send WhatsApp message: " + err.message });
+  }
+}
+
 // POST /api/leads/import-bulk (Bulk upload 500-1000+ leads from Excel / CSV)
 async function importBulkLeads(req, res) {
   try {
-    const { leads, defaultSource } = req.body;
+    const { leads, defaultSource, sendGreetings } = req.body;
 
     if (!Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: "No leads provided for import" });
@@ -455,6 +488,18 @@ async function importBulkLeads(req, res) {
           data: chunk
         });
       }
+
+      // If user selected to send automated greetings to imported leads
+      if (sendGreetings) {
+        const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+        // Dispatch greetings in background with a slight delay between each
+        (async () => {
+          for (const lead of newLeadsToInsert) {
+            await sendChatMitraLeadGreeting(lead).catch(() => {});
+            await new Promise(r => setTimeout(r, 200));
+          }
+        })();
+      }
     }
 
     return res.json({
@@ -485,4 +530,5 @@ module.exports = {
   syncSheetLeads,
   receiveWebhookLead,
   importBulkLeads,
+  sendWhatsAppToLead,
 };
