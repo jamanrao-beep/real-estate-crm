@@ -31,6 +31,15 @@ function normalizePhoneNumber(rawPhone) {
 }
 
 /**
+ * Sanitizes message body for ChatMitra raw text API
+ * ChatMitra rejects '*' formatting with 'Text contains invalid characters'
+ */
+function sanitizeForChatMitraText(text) {
+  if (!text) return "";
+  return String(text).replace(/\*/g, "");
+}
+
+/**
  * Sends an automated welcome/greeting message to a new lead via ChatMitra WhatsApp
  */
 async function sendChatMitraLeadGreeting(lead) {
@@ -46,7 +55,7 @@ async function sendChatMitraLeadGreeting(lead) {
     ? lead.name
     : "Valued Client";
 
-  const greetingBody = `👋 Welcome to *Badri Kedar Developer*!\nWe help you find the right property — plots, flats & commercial spaces.\n\nNice to meet you, ${clientName}! What are you looking for today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free VIP Site Visit\n5️⃣ 📋 Speak with Property Advisor / Brochure\n\nPlease reply with *1, 2, 3, 4, or 5* to get started! 🙂`;
+  const greetingBody = `👋 Welcome to Badri Kedar Developer!\nWe help you find the right property — plots, flats & commercial spaces.\n\nNice to meet you, ${clientName}! What are you looking for today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free VIP Site Visit\n5️⃣ 📋 Speak with Property Advisor / Brochure\n\nPlease reply with 1, 2, 3, 4, or 5 to get started! 🙂`;
 
   try {
     const payload = {
@@ -62,7 +71,7 @@ async function sendChatMitraLeadGreeting(lead) {
             type: "text",
             text: {
               preview_url: false,
-              body: greetingBody
+              body: sanitizeForChatMitraText(greetingBody)
             }
           }
         }
@@ -98,8 +107,9 @@ async function sendChatMitraLeadGreeting(lead) {
 
     return { success: true, data: response.data };
   } catch (err) {
+    const errorDetail = err.response?.data?.message || err.response?.data?.error || err.message;
     console.error(`[ChatMitra] Failed to send greeting to ${cleanPhone}:`, err.response?.data || err.message);
-    return { success: false, error: err.response?.data || err.message };
+    return { success: false, error: err.response?.data || err.message, reason: errorDetail };
   }
 }
 
@@ -109,6 +119,8 @@ async function sendChatMitraLeadGreeting(lead) {
 async function sendCustomWhatsAppMessage(phone, messageText, leadId = null, senderName = "Agent") {
   const cleanPhone = normalizePhoneNumber(phone);
   if (!cleanPhone) throw new Error("Invalid phone number");
+
+  const sanitizedBody = sanitizeForChatMitraText(messageText);
 
   const payload = {
     recipient_mobile_number: cleanPhone,
@@ -123,7 +135,7 @@ async function sendCustomWhatsAppMessage(phone, messageText, leadId = null, send
           type: "text",
           text: {
             preview_url: false,
-            body: messageText
+            body: sanitizedBody
           }
         }
       }
@@ -144,7 +156,7 @@ async function sendCustomWhatsAppMessage(phone, messageText, leadId = null, send
       const currentHistory = Array.isArray(lead.aiChatHistory) ? lead.aiChatHistory : [];
       currentHistory.push({
         sender: senderName,
-        message: messageText,
+        message: sanitizedBody,
         timestamp: new Date().toISOString(),
         channel: "whatsapp_chatmitra",
         status: "sent"
@@ -161,6 +173,7 @@ async function sendCustomWhatsAppMessage(phone, messageText, leadId = null, send
 
 module.exports = {
   normalizePhoneNumber,
+  sanitizeForChatMitraText,
   sendChatMitraLeadGreeting,
   sendCustomWhatsAppMessage
 };

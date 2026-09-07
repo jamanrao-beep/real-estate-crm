@@ -405,8 +405,9 @@ async function sendWhatsAppToLead(req, res) {
     }
 
     if (result && result.success === false) {
+      const failReason = result.reason || (typeof result.error === "string" ? result.error : result.error?.message) || "Failed to deliver WhatsApp message";
       return res.status(400).json({
-        error: result.reason ? `Failed to deliver: ${result.reason}` : "Failed to deliver WhatsApp message"
+        error: `Failed to deliver: ${failReason}`
       });
     }
 

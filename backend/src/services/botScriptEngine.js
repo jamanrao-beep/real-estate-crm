@@ -43,13 +43,13 @@ async function processLeadScriptMessage(lead, userMessage) {
   if (lower.includes("site visit") || lower.includes("book visit") || lower.includes("visit book") || lower.includes("appointment")) {
     botState.data.appointment_type = "Site Visit";
     nextStep = SCRIPT_STEPS.APPOINTMENT_DATE;
-    botReply = `🚗 *Free Site Visit Booking — Badri Kedar Developer*\nWe offer complimentary cab pickup and on-site property consultation!\n\nPlease choose your preferred date:\n(e.g., Tomorrow, This Saturday, Sunday, or DD/MM/YYYY)`;
+    botReply = `🚗 Free Site Visit Booking — Badri Kedar Developer\nWe offer complimentary cab pickup and on-site property consultation!\n\nPlease choose your preferred date:\n(e.g., Tomorrow, This Saturday, Sunday, or DD/MM/YYYY)`;
   } 
   // Global override: If user asks for advisor/call
   else if (lower.includes("call me") || lower.includes("advisor") || lower.includes("talk to agent") || lower.includes("phone call")) {
     botState.data.appointment_type = "Call Back";
     nextStep = SCRIPT_STEPS.APPOINTMENT_DATE;
-    botReply = `📞 *Connect with Senior Property Advisor*\nPlease let us know your preferred date and time for our advisor to call you:\n(e.g., Today at 4 PM, Tomorrow morning)`;
+    botReply = `📞 Connect with Senior Property Advisor\nPlease let us know your preferred date and time for our advisor to call you:\n(e.g., Today at 4 PM, Tomorrow morning)`;
   }
   // Standard Script Flow
   else {
@@ -60,23 +60,23 @@ async function processLeadScriptMessage(lead, userMessage) {
         if (text === "1" || lower.includes("residential") || lower.includes("flat") || lower.includes("villa") || lower.includes("home")) {
           botState.data.interest = "Residential Property (Villas / Gated Layouts)";
           nextStep = SCRIPT_STEPS.LOCATION;
-          botReply = `🏡 *Residential Property*\nGreat choice! We have premium gated layouts & residential plots with 30-40 ft wide roads, water & electricity.\n\nWhich location/area or project are you interested in?\n(e.g. Highway corridor, Township, or City area)`;
+          botReply = `🏡 Residential Property\nGreat choice! We have premium gated layouts & residential plots with 30-40 ft wide roads, water & electricity.\n\nWhich location/area or project are you interested in?\n(e.g. Highway corridor, Township, or City area)`;
         } else if (text === "2" || lower.includes("commercial") || lower.includes("shop") || lower.includes("office")) {
           botState.data.interest = "Commercial Property / Investment";
           nextStep = SCRIPT_STEPS.LOCATION;
-          botReply = `🏢 *Commercial Property*\nHigh-ROI commercial spaces with main highway road frontage.\n\nWhich location or project area do you prefer?`;
+          botReply = `🏢 Commercial Property\nHigh-ROI commercial spaces with main highway road frontage.\n\nWhich location or project area do you prefer?`;
         } else if (text === "3" || lower.includes("plot") || lower.includes("land")) {
           botState.data.interest = "Plot / Land (100 - 500 sq.yd)";
           nextStep = SCRIPT_STEPS.LOCATION;
-          botReply = `🌳 *Plots & Land*\nFreehold plots with instant registry & mutation in prime growth corridors.\n\nWhich location/sector are you interested in exploring?`;
+          botReply = `🌳 Plots & Land\nFreehold plots with instant registry & mutation in prime growth corridors.\n\nWhich location/sector are you interested in exploring?`;
         } else if (text === "4" || lower.includes("exploring") || lower.includes("brochure") || lower.includes("info")) {
           botState.data.interest = "Just Exploring / Brochure";
           nextStep = SCRIPT_STEPS.BUDGET;
-          botReply = `📋 *Badri Kedar Developer Projects*\nWe have exciting residential and commercial developments!\n\nWhat is your approximate budget range?\n1️⃣ Under ₹30L\n2️⃣ ₹30L – ₹60L\n3️⃣ ₹60L – ₹1Cr\n4️⃣ ₹1Cr+\n\nReply with 1, 2, 3, or 4:`;
+          botReply = `📋 Badri Kedar Developer Projects\nWe have exciting residential and commercial developments!\n\nWhat is your approximate budget range?\n1️⃣ Under ₹30L\n2️⃣ ₹30L – ₹60L\n3️⃣ ₹60L – ₹1Cr\n4️⃣ ₹1Cr+\n\nReply with 1, 2, 3, or 4:`;
         } else {
           // If greeting or unknown text, present intent options
           nextStep = SCRIPT_STEPS.INTENT;
-          botReply = `👋 Welcome to *Badri Kedar Developer*!\nWe help you find the right property — plots, villas & commercial spaces.\n\nWhat are you looking for today? Please reply with a number:\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📋 Just Exploring / Brochure`;
+          botReply = `👋 Welcome to Badri Kedar Developer!\nWe help you find the right property — plots, villas & commercial spaces.\n\nWhat are you looking for today? Please reply with a number:\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📋 Just Exploring / Brochure`;
         }
         break;
       }
@@ -110,7 +110,7 @@ async function processLeadScriptMessage(lead, userMessage) {
 
         botState.data.timeline = timelineText;
         nextStep = SCRIPT_STEPS.APPOINTMENT_TYPE;
-        botReply = `Excellent! Would you like to schedule a **site visit** or a **call with our sales team**?\n\n1️⃣ 📍 Site Visit (Free Cab & On-site consultation)\n2️⃣ ☎️ Call Back from Senior Advisor\n3️⃣ 🏢 Office Meeting\n\nPlease reply with 1, 2, or 3:`;
+        botReply = `Excellent! Would you like to schedule a site visit or a call with our sales team?\n\n1️⃣ 📍 Site Visit (Free Cab & On-site consultation)\n2️⃣ ☎️ Call Back from Senior Advisor\n3️⃣ 🏢 Office Meeting\n\nPlease reply with 1, 2, or 3:`;
         break;
       }
 
@@ -149,7 +149,7 @@ async function processLeadScriptMessage(lead, userMessage) {
         const dateStr = botState.data.date || "Upcoming";
         const interestStr = botState.data.interest || "Badri Kedar Developer Plots";
 
-        botReply = `✅ *Your appointment is booked!*\n\n• 👤 *Name:* ${clientName}\n• 📅 *Date:* ${dateStr}\n• ⏰ *Time:* ${timeSlot}\n• 📍 *Type:* ${visitType}\n• 🏠 *Interest:* ${interestStr}\n\nOur team will call you shortly to confirm details. Thank you for choosing *Badri Kedar Developer*! 🙏`;
+        botReply = `✅ Your appointment is booked!\n\n• 👤 Name: ${clientName}\n• 📅 Date: ${dateStr}\n• ⏰ Time: ${timeSlot}\n• 📍 Type: ${visitType}\n• 🏠 Interest: ${interestStr}\n\nOur team will call you shortly to confirm details. Thank you for choosing Badri Kedar Developer! 🙏`;
         break;
       }
 
@@ -167,7 +167,7 @@ async function processLeadScriptMessage(lead, userMessage) {
 
       default: {
         nextStep = SCRIPT_STEPS.INTENT;
-        botReply = `👋 Welcome to *Badri Kedar Developer*!\nHow can we assist you today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free Site Visit\n\nReply with 1, 2, 3, or 4:`;
+        botReply = `👋 Welcome to Badri Kedar Developer!\nHow can we assist you today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free Site Visit\n\nReply with 1, 2, 3, or 4:`;
       }
     }
   }
