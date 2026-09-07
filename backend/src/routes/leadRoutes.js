@@ -13,12 +13,14 @@ const {
   scheduleFollowUp,
   syncSheetLeads,
   receiveWebhookLead,
+  importBulkLeads,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
-// Google Sheet / Webhook Endpoints
+// Google Sheet / Webhook / Bulk Import Endpoints
 router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);
 router.post("/webhook", receiveWebhookLead);
+router.post("/import-bulk", requireAuth, adminOnly, importBulkLeads);
 
 // Admin-only endpoints
 router.get("/unassigned", requireAuth, adminOnly, getUnassignedLeads);

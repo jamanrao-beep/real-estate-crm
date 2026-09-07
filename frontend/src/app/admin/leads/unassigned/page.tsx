@@ -5,7 +5,8 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { RefreshCw, Users, Check, Inbox, FileSpreadsheet } from "lucide-react";
+import { RefreshCw, Users, Check, Inbox, FileSpreadsheet, Upload } from "lucide-react";
+import ExcelImportModal from "@/components/ExcelImportModal";
 
 interface Lead {
   id: string;
@@ -27,6 +28,7 @@ export default function UnassignedLeadsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDistributing, setIsDistributing] = useState(false);
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const fetchData = async () => {
@@ -101,7 +103,7 @@ export default function UnassignedLeadsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Lead Inbox</h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
-            Incoming unassigned leads from Facebook & Google Sheets.
+            Incoming unassigned leads from Facebook, Google Sheets, & Excel.
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -111,6 +113,14 @@ export default function UnassignedLeadsPage() {
             </span>
           )}
           <Button
+            size="sm"
+            onClick={() => setIsExcelModalOpen(true)}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm bg-accent hover:bg-accent/90 text-surface font-semibold"
+          >
+            <Upload size={15} />
+            Import Excel
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             onClick={handleSyncSheet}
@@ -118,7 +128,7 @@ export default function UnassignedLeadsPage() {
             className="flex-1 sm:flex-initial flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
           >
             <FileSpreadsheet size={15} className={isSyncingSheet ? "animate-spin" : ""} />
-            {isSyncingSheet ? "Syncing..." : "Sync Google Sheet"}
+            {isSyncingSheet ? "Syncing..." : "Sync Sheet"}
           </Button>
           <Button
             variant="outline"
@@ -141,6 +151,16 @@ export default function UnassignedLeadsPage() {
           </Button>
         </div>
       </div>
+
+      <ExcelImportModal 
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={(msg) => {
+          setSuccessMessage(msg);
+          fetchData();
+          setTimeout(() => setSuccessMessage(""), 5000);
+        }}
+      />
 
       {/* DESKTOP TABLE VIEW */}
       <div className="hidden md:block bg-surface border border-border rounded-xl overflow-hidden shadow-sm">

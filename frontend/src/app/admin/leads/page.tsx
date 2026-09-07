@@ -5,7 +5,8 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload } from "lucide-react";
+import ExcelImportModal from "@/components/ExcelImportModal";
 
 interface Lead {
   id: string;
@@ -50,6 +51,7 @@ export default function AllLeadsPage() {
   const [salesTeam, setSalesTeam] = useState<SalesPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
   // Filters
@@ -126,6 +128,14 @@ export default function AllLeadsPage() {
             </span>
           )}
           <Button
+            size="sm"
+            onClick={() => setIsExcelModalOpen(true)}
+            className="flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm bg-accent hover:bg-accent/90 text-surface font-semibold"
+          >
+            <Upload size={15} />
+            Import Excel
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             onClick={handleSyncSheet}
@@ -133,10 +143,20 @@ export default function AllLeadsPage() {
             className="flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
           >
             <FileSpreadsheet size={15} className={isSyncingSheet ? "animate-spin" : ""} />
-            {isSyncingSheet ? "Syncing..." : "Sync Google Sheet"}
+            {isSyncingSheet ? "Syncing..." : "Sync Sheet"}
           </Button>
         </div>
       </div>
+
+      <ExcelImportModal 
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={(msg) => {
+          setSyncMessage(msg);
+          fetchLeads();
+          setTimeout(() => setSyncMessage(""), 5000);
+        }}
+      />
 
       {/* Filters - Responsive Grid */}
       <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">

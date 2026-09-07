@@ -378,6 +378,99 @@ async function receiveWebhookLead(req, res) {
   }
 }
 
+// POST /api/leads/import-bulk (Bulk upload 500-1000+ leads from Excel / CSV)
+async function importBulkLeads(req, res) {
+  try {
+    const { leads, defaultSource } = req.body;
+
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: "No leads provided for import" });
+    }
+
+    // 1. Fetch existing phone numbers in DB to prevent duplicates
+    const existingLeads = await prisma.lead.findMany({
+      select: { phone: true, email: true }
+    });
+    const existingPhones = new Set(existingLeads.map(l => l.phone).filter(Boolean));
+    const existingEmails = new Set(existingLeads.map(l => l.email).filter(Boolean));
+
+    const newLeadsToInsert = [];
+    let duplicateCount = 0;
+    let skippedCount = 0;
+
+    for (let i = 0; i < leads.length; i++) {
+      const item = leads[i];
+      let name = item.name ? String(item.name).trim() : "";
+      let rawPhone = item.phone ? String(item.phone).trim() : "";
+      let email = item.email ? String(item.email).trim() : "";
+      let source = item.source ? String(item.source).trim() : (defaultSource || "Excel Import");
+      let notes = item.notes ? String(item.notes).trim() : null;
+
+      // Clean phone: remove 'p:', spaces, special chars except digits and plus
+      let phone = rawPhone.replace(/^p:/i, "").replace(/[^\d+]/g, "").trim();
+
+      if (!phone && !name && !email) {
+        skippedCount++;
+        continue;
+      }
+
+      if (!name) {
+        name = phone ? `Lead (${phone})` : `Lead #${i + 1}`;
+      }
+
+      // Check duplicates
+      if (phone && existingPhones.has(phone)) {
+        duplicateCount++;
+        continue;
+      }
+      if (email && existingEmails.has(email)) {
+        duplicateCount++;
+        continue;
+      }
+
+      if (phone) existingPhones.add(phone);
+      if (email) existingEmails.add(email);
+
+      newLeadsToInsert.push({
+        name,
+        phone: phone || "N/A",
+        email: email || "",
+        source,
+        formAnswers: {
+          importedFrom: "Excel/CSV",
+          notes: notes,
+          originalRow: item
+        },
+        status: "ACTIVE",
+        dateReceived: item.dateReceived ? new Date(item.dateReceived) : new Date(),
+      });
+    }
+
+    if (newLeadsToInsert.length > 0) {
+      // Chunk insertions into batches of 200 for maximum performance with Neon DB
+      const batchSize = 200;
+      for (let i = 0; i < newLeadsToInsert.length; i += batchSize) {
+        const chunk = newLeadsToInsert.slice(i, i + batchSize);
+        await prisma.lead.createMany({
+          data: chunk
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      importedCount: newLeadsToInsert.length,
+      duplicateCount,
+      skippedCount,
+      totalCount: leads.length,
+      message: `Successfully imported ${newLeadsToInsert.length} new leads (${duplicateCount} duplicates skipped)!`
+    });
+  } catch (err) {
+    console.error("Bulk import failed:", err);
+    return res.status(500).json({ error: "Failed to import leads: " + err.message });
+  }
+}
+
 module.exports = {
   getUnassignedLeads,
   getAllLeads,
@@ -391,4 +484,5 @@ module.exports = {
   scheduleFollowUp,
   syncSheetLeads,
   receiveWebhookLead,
+  importBulkLeads,
 };
