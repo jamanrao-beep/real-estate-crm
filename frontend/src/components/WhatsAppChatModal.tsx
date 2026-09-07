@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, Send, Bot, User, CheckCircle2, Phone, Sparkles, X, RefreshCw } from "lucide-react";
+import { MessageSquare, Send, Bot, User, CheckCircle2, Phone, Sparkles, X, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import api from "@/lib/api";
 
@@ -120,17 +120,31 @@ export default function WhatsAppChatModal({
         <div className="bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-100 dark:border-emerald-900/40 px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
           <div className="text-xs text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
             <Sparkles size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>Interactive options (1-5) auto-reply when the lead texts back.</span>
+            <span>Interactive bot responds when the lead texts back.</span>
           </div>
-          <Button
-            size="sm"
-            onClick={handleSendGreeting}
-            disabled={isSending}
-            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1.5 shadow-sm"
-          >
-            <RefreshCw size={12} className={isSending ? "animate-spin" : ""} />
-            Send BKD Greeting
-          </Button>
+          <div className="flex items-center gap-2">
+            {lead.phone && (
+              <a
+                href={`https://wa.me/${lead.phone.replace(/[^\d]/g, "").length === 10 ? "91" + lead.phone.replace(/[^\d]/g, "") : lead.phone.replace(/[^\d]/g, "")}?text=${encodeURIComponent("Hello! Reaching out regarding your inquiry with Badri Kedar Developer.")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-8 px-3 text-xs bg-white dark:bg-bg border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 font-medium rounded-lg inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                title="Open 1-on-1 WhatsApp chat directly"
+              >
+                <ExternalLink size={12} />
+                Open WhatsApp
+              </a>
+            )}
+            <Button
+              size="sm"
+              onClick={handleSendGreeting}
+              disabled={isSending}
+              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1.5 shadow-sm"
+            >
+              <RefreshCw size={12} className={isSending ? "animate-spin" : ""} />
+              Send BKD Greeting
+            </Button>
+          </div>
         </div>
 
         {/* Feedback Alert */}
