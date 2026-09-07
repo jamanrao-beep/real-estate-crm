@@ -327,6 +327,57 @@ async function scheduleFollowUp(req, res) {
   }
 }
 
+// POST /api/leads/sync-sheet (Trigger manual Google Sheet sync)
+async function syncSheetLeads(req, res) {
+  try {
+    const { syncGoogleSheetLeads } = require("../services/googleSheetSync");
+    const result = await syncGoogleSheetLeads();
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Failed to sync sheet leads:", err);
+    return res.status(500).json({ error: "Failed to sync Google Sheet leads: " + err.message });
+  }
+}
+
+// POST /api/leads/webhook (Instant push from Google Apps Script / Zapier / Website)
+async function receiveWebhookLead(req, res) {
+  try {
+    const { name, phone, email, source, notes, formAnswers } = req.body;
+
+    if (!phone && !name) {
+      return res.status(400).json({ error: "Name or phone number is required" });
+    }
+
+    const cleanPhone = phone ? String(phone).replace(/^p:/i, "").trim() : "";
+
+    // Check duplicate
+    if (cleanPhone) {
+      const existing = await prisma.lead.findFirst({ where: { phone: cleanPhone } });
+      if (existing) {
+        return res.status(200).json({ success: true, message: "Lead already exists", lead: existing });
+      }
+    }
+
+    const newLead = await prisma.lead.create({
+      data: {
+        name: name || (cleanPhone ? `Lead (${cleanPhone})` : "New Webhook Lead"),
+        phone: cleanPhone || "N/A",
+        email: email || "",
+        source: source || "Google Sheet / Webhook",
+        formAnswers: formAnswers || { notes: notes || null },
+        status: "ACTIVE",
+        dateReceived: new Date()
+      }
+    });
+
+    console.log(`[Webhook] Created new lead: ${newLead.name} (${newLead.phone})`);
+    return res.status(201).json({ success: true, lead: newLead });
+  } catch (err) {
+    console.error("Webhook lead creation failed:", err);
+    return res.status(500).json({ error: "Failed to create lead: " + err.message });
+  }
+}
+
 module.exports = {
   getUnassignedLeads,
   getAllLeads,
@@ -338,4 +389,6 @@ module.exports = {
   updateFunnelStage,
   logAiChatMessage,
   scheduleFollowUp,
+  syncSheetLeads,
+  receiveWebhookLead,
 };

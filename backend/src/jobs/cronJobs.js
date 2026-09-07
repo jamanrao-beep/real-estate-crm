@@ -1,4 +1,5 @@
 const prisma = require("../prisma");
+const { syncGoogleSheetLeads } = require("../services/googleSheetSync");
 
 function startCronJobs() {
   // Check for follow-ups every 1 minute
@@ -38,7 +39,24 @@ function startCronJobs() {
     }
   }, 60000); // 60,000 ms = 1 minute
 
-  console.log("Cron jobs started.");
+  // Google Sheet Auto-Sync: Runs every 2 minutes
+  const runSheetSync = async () => {
+    try {
+      const res = await syncGoogleSheetLeads();
+      if (res.synced > 0) {
+        console.log(`[AutoSync] Synced ${res.synced} new leads from Google Sheet.`);
+      }
+    } catch (err) {
+      console.error("[AutoSync] Sheet sync error:", err.message);
+    }
+  };
+
+  // Run initial sync 5 seconds after startup
+  setTimeout(runSheetSync, 5000);
+  // Then run every 2 minutes
+  setInterval(runSheetSync, 120000);
+
+  console.log("Cron jobs started (Follow-ups & Google Sheet Sync).");
 }
 
 module.exports = { startCronJobs };

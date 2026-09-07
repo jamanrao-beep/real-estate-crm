@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -49,6 +49,8 @@ export default function AllLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [salesTeam, setSalesTeam] = useState<SalesPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   // Filters
   const [salesPersonId, setSalesPersonId] = useState("");
@@ -81,6 +83,25 @@ export default function AllLeadsPage() {
     }
   };
 
+  const handleSyncSheet = async () => {
+    setIsSyncingSheet(true);
+    try {
+      const res = await api.post("/leads/sync-sheet");
+      if (res.data.synced > 0) {
+        setSyncMessage(`Synced ${res.data.synced} new lead${res.data.synced > 1 ? 's' : ''}!`);
+      } else {
+        setSyncMessage(`Google Sheet up to date (${res.data.total || 0} total rows).`);
+      }
+      fetchLeads();
+      setTimeout(() => setSyncMessage(""), 4000);
+    } catch (err: any) {
+      console.error("Failed to sync Google Sheet", err);
+      alert("Failed to sync Google Sheet: " + (err.response?.data?.error || err.message));
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
+
   useEffect(() => {
     fetchSalesTeam();
   }, []);
@@ -91,11 +112,30 @@ export default function AllLeadsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">All Leads Ledger</h1>
-        <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
-          Master view of all leads across the organization.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">All Leads Ledger</h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+            Master view of all leads across the organization.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {syncMessage && (
+            <span className="text-success text-xs sm:text-sm flex items-center gap-1 font-medium bg-success/10 px-3 py-1.5 rounded-full">
+              <Check size={14} /> {syncMessage}
+            </span>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleSyncSheet}
+            disabled={isSyncingSheet}
+            className="flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+          >
+            <FileSpreadsheet size={15} className={isSyncingSheet ? "animate-spin" : ""} />
+            {isSyncingSheet ? "Syncing..." : "Sync Google Sheet"}
+          </Button>
+        </div>
       </div>
 
       {/* Filters - Responsive Grid */}

@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { RefreshCw, Users, Check, Inbox } from "lucide-react";
+import { RefreshCw, Users, Check, Inbox, FileSpreadsheet } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -26,6 +26,7 @@ export default function UnassignedLeadsPage() {
   const [salesTeam, setSalesTeam] = useState<SalesPerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDistributing, setIsDistributing] = useState(false);
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const fetchData = async () => {
@@ -33,12 +34,12 @@ export default function UnassignedLeadsPage() {
     try {
       const [leadsRes, teamRes] = await Promise.all([
         api.get("/leads/unassigned"),
-        api.get("/auth/users"), // Our newly added endpoint
+        api.get("/reports/sales-team"),
       ]);
       setLeads(leadsRes.data);
       setSalesTeam(teamRes.data);
     } catch (err) {
-      console.error("Failed to fetch data", err);
+      console.error("Failed to fetch inbox data", err);
     } finally {
       setIsLoading(false);
     }
@@ -48,12 +49,32 @@ export default function UnassignedLeadsPage() {
     fetchData();
   }, []);
 
+  const handleSyncSheet = async () => {
+    setIsSyncingSheet(true);
+    try {
+      const res = await api.post("/leads/sync-sheet");
+      if (res.data.synced > 0) {
+        setSuccessMessage(`Synced ${res.data.synced} new lead${res.data.synced > 1 ? 's' : ''} from Google Sheet!`);
+      } else {
+        setSuccessMessage(`Google Sheet up to date (${res.data.total || 0} total rows).`);
+      }
+      fetchData();
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: any) {
+      console.error("Failed to sync Google Sheet", err);
+      alert("Failed to sync Google Sheet: " + (err.response?.data?.error || err.message));
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
+
   const handleManualAssign = async (leadId: string, salesPersonId: string) => {
     if (!salesPersonId) return;
     try {
       await api.patch(`/leads/${leadId}/assign`, { salesPersonId });
       setLeads((prev) => prev.filter((l) => l.id !== leadId));
-      showSuccess("Lead assigned successfully");
+      setSuccessMessage("Lead assigned successfully!");
+      setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
       console.error("Failed to assign lead", err);
     }
@@ -63,18 +84,15 @@ export default function UnassignedLeadsPage() {
     setIsDistributing(true);
     try {
       const res = await api.post("/leads/auto-assign");
-      showSuccess(res.data.message);
-      fetchData(); // Refresh list to empty
-    } catch (err) {
-      console.error("Failed to auto-distribute", err);
+      setSuccessMessage(res.data.message || "Leads distributed evenly!");
+      fetchData();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err: any) {
+      console.error("Auto-assign failed", err);
+      alert(err.response?.data?.error || "Failed to auto-distribute leads");
     } finally {
       setIsDistributing(false);
     }
-  };
-
-  const showSuccess = (msg: string) => {
-    setSuccessMessage(msg);
-    setTimeout(() => setSuccessMessage(""), 3000);
   };
 
   return (
@@ -83,7 +101,7 @@ export default function UnassignedLeadsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Lead Inbox</h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
-            Incoming unassigned leads from Facebook & campaigns.
+            Incoming unassigned leads from Facebook & Google Sheets.
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -92,6 +110,16 @@ export default function UnassignedLeadsPage() {
               <Check size={14} /> {successMessage}
             </span>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleSyncSheet}
+            disabled={isSyncingSheet}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+          >
+            <FileSpreadsheet size={15} className={isSyncingSheet ? "animate-spin" : ""} />
+            {isSyncingSheet ? "Syncing..." : "Sync Google Sheet"}
+          </Button>
           <Button
             variant="outline"
             size="sm"

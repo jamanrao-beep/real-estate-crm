@@ -11,8 +11,14 @@ const {
   updateFunnelStage,
   logAiChatMessage,
   scheduleFollowUp,
+  syncSheetLeads,
+  receiveWebhookLead,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
+
+// Google Sheet / Webhook Endpoints
+router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);
+router.post("/webhook", receiveWebhookLead);
 
 // Admin-only endpoints
 router.get("/unassigned", requireAuth, adminOnly, getUnassignedLeads);
