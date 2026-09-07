@@ -5,15 +5,17 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, Bot, MessageCircle } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, Bot, MessageCircle, UserPlus } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
 import WhatsAppChatModal from "@/components/WhatsAppChatModal";
+import AddLeadModal from "@/components/AddLeadModal";
 
 interface Lead {
   id: string;
   name: string;
   phone: string;
   email: string;
+  source?: string;
   category: string | null;
   funnelStage: string | null;
   status: string;
@@ -54,6 +56,7 @@ export default function AllLeadsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+  const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
 
@@ -107,6 +110,26 @@ export default function AllLeadsPage() {
     }
   };
 
+  const handleManualAssign = async (leadId: string, salesPersonId: string) => {
+    if (!salesPersonId) return;
+    try {
+      await api.patch(`/leads/${leadId}/assign`, { salesPersonId });
+      const rep = salesTeam.find((r) => r.id === salesPersonId);
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadId
+            ? { ...l, assignedTo: rep ? { id: rep.id, name: rep.name } : null }
+            : l
+        )
+      );
+      setSyncMessage(`Lead assigned to ${rep?.name || "Sales Rep"}!`);
+      setTimeout(() => setSyncMessage(""), 3500);
+    } catch (err) {
+      console.error("Failed to assign lead", err);
+      alert("Failed to assign lead.");
+    }
+  };
+
   useEffect(() => {
     fetchSalesTeam();
   }, []);
@@ -132,10 +155,19 @@ export default function AllLeadsPage() {
           )}
           <Button
             size="sm"
-            onClick={() => setIsExcelModalOpen(true)}
-            className="flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm bg-accent hover:bg-accent/90 text-surface font-semibold"
+            onClick={() => setIsAddLeadModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm bg-accent hover:bg-accent/90 text-surface font-semibold shadow-sm"
           >
-            <Upload size={15} />
+            <UserPlus size={15} />
+            + Add Lead
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsExcelModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm font-medium"
+          >
+            <Upload size={14} />
             Import Excel
           </Button>
           <Button
@@ -143,9 +175,9 @@ export default function AllLeadsPage() {
             size="sm"
             onClick={handleSyncSheet}
             disabled={isSyncingSheet}
-            className="flex items-center justify-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+            className="flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
           >
-            <FileSpreadsheet size={15} className={isSyncingSheet ? "animate-spin" : ""} />
+            <FileSpreadsheet size={14} className={isSyncingSheet ? "animate-spin" : ""} />
             {isSyncingSheet ? "Syncing..." : "Sync Sheet"}
           </Button>
         </div>
@@ -154,6 +186,16 @@ export default function AllLeadsPage() {
       <ExcelImportModal 
         isOpen={isExcelModalOpen}
         onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={(msg) => {
+          setSyncMessage(msg);
+          fetchLeads();
+          setTimeout(() => setSyncMessage(""), 5000);
+        }}
+      />
+
+      <AddLeadModal
+        isOpen={isAddLeadModalOpen}
+        onClose={() => setIsAddLeadModalOpen(false)}
         onSuccess={(msg) => {
           setSyncMessage(msg);
           fetchLeads();
@@ -299,7 +341,20 @@ export default function AllLeadsPage() {
                       {lead.assignedTo ? (
                         <span className="text-ink font-medium">{lead.assignedTo.name}</span>
                       ) : (
-                        <span className="text-ink-soft italic">Unassigned</span>
+                        <Select
+                          className="w-36 bg-bg text-xs h-8 border-amber-500/30 text-amber-700 dark:text-amber-400 font-medium"
+                          defaultValue=""
+                          onChange={(e) => handleManualAssign(lead.id, e.target.value)}
+                        >
+                          <option value="" disabled>
+                            Assign Rep...
+                          </option>
+                          {salesTeam.map((rep) => (
+                            <option key={rep.id} value={rep.id}>
+                              👤 {rep.name}
+                            </option>
+                          ))}
+                        </Select>
                       )}
                     </td>
                     <td className="p-4 align-top">
@@ -394,9 +449,26 @@ export default function AllLeadsPage() {
               {/* Assignment & Badges */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
                 <span className="text-xs text-ink-soft">Rep:</span>
-                <span className="text-xs font-semibold text-ink bg-bg px-2 py-0.5 rounded border border-border">
-                  {lead.assignedTo ? lead.assignedTo.name : "Unassigned"}
-                </span>
+                {lead.assignedTo ? (
+                  <span className="text-xs font-semibold text-ink bg-bg px-2 py-0.5 rounded border border-border">
+                    {lead.assignedTo.name}
+                  </span>
+                ) : (
+                  <Select
+                    className="bg-bg text-xs h-7 border-amber-500/30 text-amber-700 dark:text-amber-400 font-medium"
+                    defaultValue=""
+                    onChange={(e) => handleManualAssign(lead.id, e.target.value)}
+                  >
+                    <option value="" disabled>
+                      Assign Rep...
+                    </option>
+                    {salesTeam.map((rep) => (
+                      <option key={rep.id} value={rep.id}>
+                        👤 {rep.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
                 {lead.category && (
                   <Badge
                     variant={
