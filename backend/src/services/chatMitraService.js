@@ -46,7 +46,7 @@ async function sendChatMitraLeadGreeting(lead) {
     ? lead.name
     : "Valued Client";
 
-  const greetingBody = `Namaste ${clientName}! 🙏 Welcome to *Badri Kedar Developers (BKD)*.\n\nThank you for reaching out to us regarding our prime residential and commercial plots.\n\nPlease reply with *HI* or *1* to explore plot details, get our master brochure, or book a free VIP site visit!`;
+  const greetingBody = `👋 Welcome to *Badri Kedar Developer*!\nWe help you find the right property — plots, flats & commercial spaces.\n\nNice to meet you, ${clientName}! What are you looking for today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free VIP Site Visit\n5️⃣ 📋 Speak with Property Advisor / Brochure\n\nPlease reply with *1, 2, 3, 4, or 5* to get started! 🙂`;
 
   try {
     const payload = {

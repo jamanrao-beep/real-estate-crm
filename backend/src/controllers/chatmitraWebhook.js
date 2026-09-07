@@ -75,7 +75,7 @@ async function receiveChatMitraWebhook(req, res) {
 
     if (!lead) return;
 
-    // 3. Append to AI Chat History
+    // 3. Append customer message to AI Chat History
     const chatHistory = Array.isArray(lead.aiChatHistory) ? [...lead.aiChatHistory] : [];
     chatHistory.push({
       sender,
@@ -84,46 +84,32 @@ async function receiveChatMitraWebhook(req, res) {
       channel: "whatsapp_chatmitra"
     });
 
-    const updateData = { aiChatHistory: chatHistory };
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { aiChatHistory: chatHistory }
+    });
 
-    // 4. Intent detection on customer replies
+    // 4. Process multi-step script engine for customer messages
     if (isCustomerMessage) {
-      const lower = messageText.toLowerCase();
+      const { processLeadScriptMessage } = require("../services/botScriptEngine");
+      const { sendCustomWhatsAppMessage } = require("../services/chatMitraService");
 
-      // Check if asking for site visit, pricing, or buying
-      if (lower.includes("visit") || lower.includes("site visit") || lower.includes("location") || lower.includes("3")) {
-        updateData.category = "HOT";
-        
-        // Notify Admins and assigned sales person
-        const admins = await prisma.user.findMany({ where: { role: "ADMIN" } });
-        const targets = [...admins.map(a => a.id)];
-        if (lead.assignedToId && !targets.includes(lead.assignedToId)) {
-          targets.push(lead.assignedToId);
-        }
-
-        if (targets.length > 0) {
-          await prisma.notification.createMany({
-            data: targets.map(uid => ({
-              userId: uid,
-              message: `🚗 Site Visit Request: ${lead.name} (${lead.phone}) responded on WhatsApp: "${messageText.substring(0, 60)}"`
-            }))
-          }).catch(err => console.error("Notification error:", err.message));
-        }
-      } else if (lower.includes("buy") || lower.includes("price") || lower.includes("rate") || lower.includes("discount") || lower.includes("booking")) {
-        updateData.category = "HOT";
+      const scriptResult = await processLeadScriptMessage(lead, messageText);
+      
+      if (scriptResult && scriptResult.reply) {
+        // Send automated scripted response back on WhatsApp
+        await sendCustomWhatsAppMessage(cleanPhone, scriptResult.reply, lead.id, "Bot BKD").catch(err =>
+          console.error(`[ChatMitra Webhook] Failed to dispatch bot reply to ${cleanPhone}:`, err.message)
+        );
+        console.log(`[ChatMitra Webhook] Dispatched scripted reply to ${lead.name} (${cleanPhone}) for step: ${scriptResult.nextStep}`);
       }
     }
 
-    // 5. Update lead record
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: updateData
-    });
-
-    console.log(`[ChatMitra Webhook] Updated lead ${lead.id} (${lead.name}) chat history with message from ${sender}.`);
+    console.log(`[ChatMitra Webhook] Successfully handled message for lead ${lead.id} (${lead.name}).`);
   } catch (err) {
     console.error("[ChatMitra Webhook] Error processing event:", err);
   }
 }
 
 module.exports = { receiveChatMitraWebhook };
+
