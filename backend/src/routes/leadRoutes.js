@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const {
+  createLead,
   getUnassignedLeads,
   getAllLeads,
   getMyLeads,
@@ -17,6 +18,9 @@ const {
   sendWhatsAppToLead,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
+
+// Lead Creation (Manual / Test lead from UI)
+router.post("/", requireAuth, createLead);
 
 // Google Sheet / Webhook / Bulk Import Endpoints
 router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);

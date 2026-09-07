@@ -121,12 +121,23 @@ async function syncGoogleSheetLeads() {
         continue;
       }
 
-      // Parse date if valid
+      // Parse date if valid (supports ISO, standard dates, and DD/MM/YYYY)
       let dateReceived = new Date();
       if (createdTime) {
         const parsedDate = new Date(createdTime);
         if (!isNaN(parsedDate.getTime())) {
           dateReceived = parsedDate;
+        } else {
+          const parts = String(createdTime).split(/[\/\-\s:]+/);
+          if (parts.length >= 3) {
+            const d = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const y = parseInt(parts[2], 10);
+            const testD = new Date(y < 100 ? 2000 + y : y, m, d);
+            if (!isNaN(testD.getTime())) {
+              dateReceived = testD;
+            }
+          }
         }
       }
 

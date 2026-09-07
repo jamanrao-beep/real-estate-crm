@@ -57,31 +57,55 @@ async function fetchAndStoreLead(leadgenId, formId) {
 
   // field_data looks like: [{ name: "full_name", values: ["John Doe"] }, ...]
   const getField = (fieldName) =>
-    fieldData.find((f) => f.name === fieldName)?.values?.[0] || null;
+    fieldData.find((f) => f.name.toLowerCase() === fieldName.toLowerCase())?.values?.[0] || null;
 
-  const name = getField("full_name") || getField("name") || "Unknown";
-  const phone = getField("phone_number") || getField("phone");
-  const email = getField("email");
+  const firstName = getField("first_name");
+  const lastName = getField("last_name");
+  const combinedName = firstName ? `${firstName} ${lastName || ""}`.trim() : null;
+
+  const name = getField("full_name") || getField("name") || getField("customer_name") || combinedName || "Facebook Lead";
+  const rawPhone = getField("phone_number") || getField("phone") || getField("mobile_number") || getField("contact_number");
+  const email = getField("email") || getField("email_address");
+
+  const cleanPhone = rawPhone ? String(rawPhone).replace(/^p:/i, "").replace(/[^\d+]/g, "").trim() : "";
+
+  // Duplicate check
+  if (cleanPhone) {
+    const existing = await prisma.lead.findFirst({
+      where: {
+        phone: { in: [cleanPhone, cleanPhone.replace(/^\+91/, ""), `+91${cleanPhone.replace(/^\+?91/, "")}`] },
+      },
+    });
+    if (existing) {
+      console.log(`[Facebook Webhook] Lead with phone ${cleanPhone} already exists, skipping duplicate creation.`);
+      return existing;
+    }
+  }
 
   const newLead = await prisma.lead.create({
     data: {
       name,
-      phone: phone || "",
-      email,
-      source: `Facebook Lead Ad (form ${formId})`,
-      formAnswers: fieldData, // keep the raw answers too, in case you need other fields later
+      phone: cleanPhone || "N/A",
+      email: email || "",
+      source: formId ? `Facebook Lead Ad (Form ${formId})` : "Facebook Lead Ad",
+      formAnswers: fieldData, // keep the raw answers too
+      status: "ACTIVE",
+      category: "HOT",
+      funnelStage: "INTERESTED",
       dateReceived: new Date(),
       // assignedToId is intentionally left null — lands in Admin's unassigned inbox
     },
   });
 
-  console.log(`New lead created from Facebook: ${name}`);
+  console.log(`New lead created from Facebook: ${name} (${cleanPhone})`);
 
   // Trigger automated WhatsApp greeting via ChatMitra Bot
   const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
   sendChatMitraLeadGreeting(newLead).catch((err) =>
     console.error(`[Facebook Webhook] WhatsApp greeting error for ${name}:`, err.message)
   );
+
+  return newLead;
 }
 
 module.exports = { verifyWebhook, receiveLeadEvent }; 
