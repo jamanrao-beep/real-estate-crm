@@ -7,7 +7,11 @@ const {
   exportAllTransactions,
   exportMyTransactions,
 } = require("../controllers/reportController");
+const { getAllUsers } = require("../controllers/authController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
+
+// Sales Team route (supports both /api/reports/sales-team and /api/auth/users)
+router.get("/sales-team", requireAuth, adminOnly, getAllUsers);
 
 // PRD 4.3 — monthly performance dashboard
 router.get("/performance/export", requireAuth, adminOnly, exportPerformance);

@@ -30,9 +30,15 @@ async function submitLead(req, res) {
         name,
         phone,
         email,
-        source: source || "Channel Partner",
+        source: source || "Channel Partner Portal",
         brokerId: req.user.userId,
       },
+    });
+
+    // Automatically send WhatsApp greeting to the new lead
+    const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+    sendChatMitraLeadGreeting(newLead).catch((err) => {
+      console.error("[Broker] Automated WhatsApp greeting dispatch error:", err);
     });
 
     return res.status(201).json(newLead);

@@ -71,6 +71,7 @@ async function assignLead(req, res) {
       prisma.lead.update({
         where: { id },
         data: { assignedToId: salesPersonId },
+        include: { assignedTo: { select: { id: true, name: true, email: true } } },
       }),
       prisma.leadAssignmentHistory.create({
         data: {
@@ -137,7 +138,7 @@ async function autoAssignLeads(req, res) {
 async function markLeadLost(req, res) {
   try {
     const { id } = req.params;
-    const { reason } = req.body; // optional free-text, stored in history notes if you extend it later
+    const { reason } = req.body || {}; // optional free-text, stored in history notes if you extend it later
 
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) {
@@ -403,6 +404,12 @@ async function sendWhatsAppToLead(req, res) {
       result = await sendChatMitraLeadGreeting(lead);
     }
 
+    if (result && result.success === false) {
+      return res.status(400).json({
+        error: result.reason ? `Failed to deliver: ${result.reason}` : "Failed to deliver WhatsApp message"
+      });
+    }
+
     const updatedLead = await prisma.lead.findUnique({ where: { id } });
     return res.json({ success: true, result, lead: updatedLead });
   } catch (err) {
@@ -464,6 +471,9 @@ async function importBulkLeads(req, res) {
       if (phone) existingPhones.add(phone);
       if (email) existingEmails.add(email);
 
+      let parsedDate = item.dateReceived ? new Date(item.dateReceived) : new Date();
+      if (isNaN(parsedDate.getTime())) parsedDate = new Date();
+
       newLeadsToInsert.push({
         name,
         phone: phone || "N/A",
@@ -475,7 +485,7 @@ async function importBulkLeads(req, res) {
           originalRow: item
         },
         status: "ACTIVE",
-        dateReceived: item.dateReceived ? new Date(item.dateReceived) : new Date(),
+        dateReceived: parsedDate,
       });
     }
 
@@ -516,7 +526,73 @@ async function importBulkLeads(req, res) {
   }
 }
 
+// POST /api/leads (Manual / Test Lead Creation)
+async function createLead(req, res) {
+  try {
+    const { name, phone, email, source, notes, assignedToId, category, funnelStage } = req.body;
+
+    if (!name && !phone) {
+      return res.status(400).json({ error: "Name or Phone is required" });
+    }
+
+    const cleanPhone = phone ? String(phone).replace(/^p:/i, "").replace(/[^\d+]/g, "").trim() : "";
+
+    // Check duplicate
+    if (cleanPhone && cleanPhone !== "N/A") {
+      const existing = await prisma.lead.findFirst({ where: { phone: cleanPhone } });
+      if (existing) {
+        return res.status(400).json({ error: "A lead with this phone number already exists", lead: existing });
+      }
+    }
+
+    let assignedId = assignedToId || null;
+    if (req.user.role === "SALES_PERSON" && !assignedId) {
+      assignedId = req.user.userId;
+    }
+
+    const newLead = await prisma.lead.create({
+      data: {
+        name: name || (cleanPhone ? `Lead (${cleanPhone})` : "New Lead"),
+        phone: cleanPhone || "N/A",
+        email: email || "",
+        source: source || "Manual Entry",
+        formAnswers: notes ? { notes } : undefined,
+        category: category || "WARM",
+        funnelStage: funnelStage || "INTERESTED",
+        status: "ACTIVE",
+        assignedToId: assignedId,
+        dateReceived: new Date(),
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+      },
+    });
+
+    if (assignedId) {
+      await prisma.leadAssignmentHistory.create({
+        data: {
+          leadId: newLead.id,
+          assignedToId: assignedId,
+          assignedById: req.user.userId,
+        },
+      });
+    }
+
+    // Automatically send WhatsApp greeting to the new lead
+    const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+    sendChatMitraLeadGreeting(newLead).catch((err) => {
+      console.error("[LeadController] Automated WhatsApp greeting error:", err);
+    });
+
+    return res.status(201).json(newLead);
+  } catch (err) {
+    console.error("Failed to create lead:", err);
+    return res.status(500).json({ error: "Failed to create lead: " + err.message });
+  }
+}
+
 module.exports = {
+  createLead,
   getUnassignedLeads,
   getAllLeads,
   getMyLeads,
