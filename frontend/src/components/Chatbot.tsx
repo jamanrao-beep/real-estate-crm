@@ -343,28 +343,32 @@ export function Chatbot() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 font-sans">
+    <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 font-sans">
       {isOpen ? (
-        <div className="bg-surface w-[92vw] sm:w-[380px] md:w-[400px] rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col h-[560px] max-h-[85vh] animate-fade-in">
+        <div className="bg-surface w-[92vw] sm:w-[390px] md:w-[410px] rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col h-[560px] max-h-[85vh] animate-in fade-in-50 zoom-in-95 duration-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 flex justify-between items-center shadow-md">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white">
-                <Bot size={20} />
+          <div className="bg-gradient-to-r from-ink via-[#273640] to-ink border-b border-accent/30 text-surface p-4 flex justify-between items-center shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-surface/10 border border-accent/40 flex items-center justify-center text-accent shadow-inner">
+                <Sparkles size={20} className="text-accent" />
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <span className="font-serif font-bold text-sm tracking-wide text-white">Badri Kedar AI</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Online
+                  </span>
                 </div>
-                <p className="text-[11px] text-emerald-100 font-medium">Property & Site Visit Assistant</p>
+                <p className="text-[11px] text-accent font-medium">Property & Site Visit Concierge</p>
               </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              className="text-surface/70 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors"
+              aria-label="Close assistant"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
 
@@ -373,10 +377,10 @@ export function Chatbot() {
             {messages.map((msg) => (
               <div key={msg.id} className="space-y-2">
                 <div
-                  className={`max-w-[85%] p-3.5 rounded-2xl text-xs sm:text-sm shadow-sm leading-relaxed ${
+                  className={`max-w-[85%] p-3.5 rounded-2xl text-xs sm:text-sm shadow-2xs leading-relaxed ${
                     msg.sender === "user"
-                      ? "bg-emerald-600 text-white self-end ml-auto rounded-br-xs"
-                      : "bg-surface border border-border text-ink self-start rounded-bl-xs"
+                      ? "bg-ink text-surface self-end ml-auto rounded-br-xs border border-accent/20"
+                      : "bg-surface border border-border text-ink self-start rounded-bl-xs shadow-2xs"
                   }`}
                 >
                   <div className="whitespace-pre-line">{msg.text}</div>
@@ -384,18 +388,20 @@ export function Chatbot() {
 
                 {/* Confirmation Card if booked */}
                 {msg.isConfirmedCard && msg.confirmedData && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-xl p-3.5 text-xs space-y-2 text-ink shadow-sm">
-                    <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300 text-xs">
-                      <CheckCircle2 size={15} className="text-emerald-600" />
-                      <span>Booking Summary</span>
+                  <div className="bg-accent-soft/25 border border-accent/40 rounded-2xl p-4 text-xs space-y-2.5 text-ink shadow-xs">
+                    <div className="flex items-center gap-2 font-bold text-ink text-xs">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-700 flex items-center justify-center">
+                        <CheckCircle2 size={14} className="text-emerald-600" />
+                      </div>
+                      <span className="font-serif tracking-tight">Appointment Booking Confirmed</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1 border-t border-emerald-200 dark:border-emerald-900">
-                      <div><span className="text-ink-soft">Name:</span> <strong className="text-ink">{msg.confirmedData.name}</strong></div>
-                      <div><span className="text-ink-soft">Phone:</span> <strong className="text-ink">{msg.confirmedData.phone}</strong></div>
-                      <div><span className="text-ink-soft">Type:</span> <strong className="text-emerald-700 dark:text-emerald-400">{msg.confirmedData.appointmentType}</strong></div>
-                      <div><span className="text-ink-soft">Date:</span> <strong className="text-ink">{msg.confirmedData.date}</strong></div>
-                      <div className="col-span-2"><span className="text-ink-soft">Time:</span> <strong className="text-ink">{msg.confirmedData.time}</strong></div>
-                      <div className="col-span-2"><span className="text-ink-soft">Interest:</span> <strong className="text-ink">{msg.confirmedData.interest}</strong></div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-accent/20">
+                      <div><span className="text-ink-soft">Client:</span> <strong className="text-ink block">{msg.confirmedData.name}</strong></div>
+                      <div><span className="text-ink-soft">Phone:</span> <strong className="text-ink block">{msg.confirmedData.phone}</strong></div>
+                      <div><span className="text-ink-soft">Booking Type:</span> <strong className="text-accent block">{msg.confirmedData.appointmentType}</strong></div>
+                      <div><span className="text-ink-soft">Preferred Date:</span> <strong className="text-ink block">{msg.confirmedData.date}</strong></div>
+                      <div className="col-span-2"><span className="text-ink-soft">Time Slot:</span> <strong className="text-ink block">{msg.confirmedData.time}</strong></div>
+                      <div className="col-span-2"><span className="text-ink-soft">Property Interest:</span> <strong className="text-ink block">{msg.confirmedData.interest}</strong></div>
                     </div>
                   </div>
                 )}
@@ -407,7 +413,7 @@ export function Chatbot() {
                       <button
                         key={i}
                         onClick={() => handleUserInput(opt)}
-                        className="bg-surface hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-2xs hover:scale-102 text-left"
+                        className="bg-surface hover:bg-accent-soft/40 text-ink border border-border hover:border-accent px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-2xs hover:scale-102 text-left"
                       >
                         {opt}
                       </button>
@@ -431,30 +437,44 @@ export function Chatbot() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your reply here..."
+              placeholder="Type your reply or question..."
               disabled={isSubmitting}
-              className="flex-1 border border-border bg-bg rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder:text-ink-soft"
+              className="flex-1 border border-border bg-bg rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-ink focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent placeholder:text-ink-soft"
             />
             <button
               type="submit"
               disabled={!input.trim() || isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-2.5 rounded-xl transition-colors flex items-center justify-center shadow-sm"
+              className="bg-ink hover:bg-ink/90 disabled:opacity-50 text-accent border border-accent/30 p-2.5 rounded-xl transition-all flex items-center justify-center shadow-xs"
             >
-              <Send size={16} />
+              <Send size={15} />
             </button>
           </form>
-          <div className="py-1.5 bg-surface text-center text-[10px] text-ink-soft border-t border-border/60 flex items-center justify-center gap-1">
-            <ShieldCheck size={11} className="text-emerald-600" />
-            <span>Badri Kedar Developer AI CRM Assistant</span>
+          <div className="py-1.5 bg-surface text-center text-[10px] text-ink-soft border-t border-border/60 flex items-center justify-center gap-1.5">
+            <ShieldCheck size={12} className="text-accent" />
+            <span>Badri Kedar Developer AI Assistant &bull; Verified CRM</span>
           </div>
         </div>
       ) : (
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-3.5 sm:p-4 rounded-full shadow-xl hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-2 group border border-white/20"
+          className="group flex items-center gap-2.5 sm:gap-3 bg-ink text-surface pl-3 pr-4 sm:pl-3.5 sm:pr-5 py-2.5 sm:py-3 rounded-full shadow-xl hover:shadow-2xl border border-accent/40 hover:border-accent transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
+          aria-label="Open Site Visit Assistant"
         >
-          <MessageSquare size={22} className="group-hover:rotate-12 transition-transform" />
-          <span className="hidden sm:inline font-bold text-xs tracking-wide pr-1">Book Site Visit</span>
+          <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 border border-accent/40 text-accent group-hover:scale-110 transition-transform">
+            <Sparkles size={16} className="text-accent group-hover:rotate-12 transition-transform" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-ink"></span>
+            </span>
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-[9px] uppercase font-mono tracking-widest text-accent font-semibold leading-tight">
+              Badri Kedar AI
+            </span>
+            <span className="text-xs sm:text-sm font-bold text-white tracking-wide leading-tight">
+              Book Site Visit
+            </span>
+          </div>
         </button>
       )}
     </div>

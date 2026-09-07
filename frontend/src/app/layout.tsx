@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import { Chatbot } from "@/components/Chatbot";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -53,7 +52,6 @@ export default function RootLayout({
       >
         <AuthProvider>
           {children}
-          <Chatbot />
         </AuthProvider>
       </body>
     </html>
