@@ -57,6 +57,68 @@ async function sendChatMitraLeadGreeting(lead) {
 
   const greetingBody = `👋 Welcome to Badri Kedar Developer!\nWe help you find the right property — plots, flats & commercial spaces.\n\nNice to meet you, ${clientName}! What are you looking for today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free VIP Site Visit\n5️⃣ 📋 Speak with Property Advisor / Brochure\n\nPlease reply with 1, 2, 3, 4, or 5 to get started! 🙂`;
 
+  // 1. Try sending official Meta-approved template first (bypasses 24h customer window)
+  try {
+    const templatePayload = {
+      recipient_mobile_number: cleanPhone,
+      customer_name: clientName,
+      messages: [
+        {
+          kind: "template",
+          template: {
+            name: "bkd_welcome_greeting",
+            language: "en",
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: clientName
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    const templateRes = await axios.post(CHATMITRA_API_URL, templatePayload, {
+      headers: {
+        "Authorization": `Bearer ${CHATMITRA_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 10000
+    });
+
+    if (templateRes.data?.send_status === "completed" || templateRes.data?.sent_count > 0) {
+      console.log(`[ChatMitra] Sent template greeting 'bkd_welcome_greeting' to ${clientName} (${cleanPhone})`);
+
+      if (lead.id) {
+        const currentHistory = Array.isArray(lead.aiChatHistory) ? lead.aiChatHistory : [];
+        currentHistory.push({
+          sender: "bot",
+          message: greetingBody,
+          timestamp: new Date().toISOString(),
+          channel: "whatsapp_chatmitra",
+          status: "sent",
+          template: "bkd_welcome_greeting"
+        });
+
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { aiChatHistory: currentHistory }
+        }).catch(err => console.error("[ChatMitra] Failed to log chat history:", err.message));
+      }
+
+      return { success: true, data: templateRes.data };
+    }
+  } catch (tmplErr) {
+    console.log(`[ChatMitra] Template send pending/unavailable, using raw session dispatch:`, tmplErr.response?.data?.message || tmplErr.message);
+  }
+
+  // 2. Fallback to raw session message (for active 24h window)
   try {
     const payload = {
       recipient_mobile_number: cleanPhone,
@@ -86,7 +148,7 @@ async function sendChatMitraLeadGreeting(lead) {
       timeout: 12000
     });
 
-    console.log(`[ChatMitra] Sent greeting to ${clientName} (${cleanPhone}): Status ${response.status}`);
+    console.log(`[ChatMitra] Sent raw greeting to ${clientName} (${cleanPhone}): Status ${response.status}`);
 
     // Log message in lead's aiChatHistory if lead.id is present
     if (lead.id) {
