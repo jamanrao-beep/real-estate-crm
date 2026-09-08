@@ -53,8 +53,6 @@ async function receiveChatMitraWebhook(req, res) {
           phone: cleanPhone,
           source: "WhatsApp Bot (ChatMitra)",
           status: "ACTIVE",
-          category: "HOT",
-          funnelStage: "INTERESTED",
           aiChatHistory: [],
           dateReceived: new Date()
         }
@@ -101,7 +99,7 @@ async function receiveChatMitraWebhook(req, res) {
         await sendCustomWhatsAppMessage(cleanPhone, scriptResult.reply, lead.id, "Bot BKD").catch(err =>
           console.error(`[ChatMitra Webhook] Failed to dispatch bot reply to ${cleanPhone}:`, err.message)
         );
-        console.log(`[ChatMitra Webhook] Dispatched scripted reply to ${lead.name} (${cleanPhone}) for step: ${scriptResult.nextStep}`);
+        console.log(`[ChatMitra Webhook] Dispatched reply to ${lead.name} (${cleanPhone}) for intent: ${scriptResult.intent || 'General'}`);
       }
     }
 
