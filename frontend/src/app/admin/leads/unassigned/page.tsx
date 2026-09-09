@@ -13,7 +13,6 @@ import {
   Inbox, 
   FileSpreadsheet, 
   Upload, 
-  Bot, 
   UserPlus, 
   Search, 
   Filter, 
@@ -26,7 +25,6 @@ import {
   SlidersHorizontal
 } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
-import WhatsAppChatModal from "@/components/WhatsAppChatModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import TeamDistributionModal, { SalesMember } from "@/components/TeamDistributionModal";
 
@@ -55,7 +53,6 @@ export default function UnassignedLeadsPage() {
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [togglingRepId, setTogglingRepId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
-  const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
   // Search & Filter state
@@ -579,20 +576,7 @@ export default function UnassignedLeadsPage() {
                     </td>
 
                     <td className="p-4 align-top text-right">
-                      <div className="flex justify-end items-center gap-2.5">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setSelectedWhatsAppLead(lead)}
-                          className="h-9 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-medium"
-                        >
-                          <Bot size={13} className="text-emerald-600 dark:text-emerald-400" />
-                          <span>WhatsApp</span>
-                          {Array.isArray(lead.aiChatHistory) && lead.aiChatHistory.length > 0 && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          )}
-                        </Button>
-
+                      <div className="flex justify-end items-center">
                         <div className="w-52">
                           <Select
                             className="w-full bg-bg text-xs h-9"
@@ -692,16 +676,6 @@ export default function UnassignedLeadsPage() {
               )}
 
               <div className="pt-2 border-t border-border/60 space-y-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setSelectedWhatsAppLead(lead)}
-                  className="w-full h-9 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 font-semibold"
-                >
-                  <Bot size={14} />
-                  <span>WhatsApp Bot & Chat</span>
-                </Button>
-
                 <div>
                   <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
                     Assign Lead To:
@@ -727,19 +701,6 @@ export default function UnassignedLeadsPage() {
           ))
         )}
       </div>
-
-      {/* WhatsApp Bot / Chat Modal */}
-      <WhatsAppChatModal
-        isOpen={!!selectedWhatsAppLead}
-        onClose={() => setSelectedWhatsAppLead(null)}
-        lead={selectedWhatsAppLead}
-        onLeadUpdated={(updatedLead) => {
-          setLeads((prev) =>
-            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
-          );
-          setSelectedWhatsAppLead((prev) => (prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev));
-        }}
-      />
 
       {/* Selective Lead Distribution Modal */}
       <TeamDistributionModal

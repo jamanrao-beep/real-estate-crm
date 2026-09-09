@@ -30,21 +30,31 @@ async function computePerformance(salesPersonId, start, end) {
       where: { assignedToId: salesPersonId, assignedAt: { gte: start, lt: end } },
     }),
 
-    // Total leads converted: distinct leads that hit DEAL_CLOSED in this period
-    prisma.leadStatusHistory.count({
+    // Total leads converted: distinct leads that were set to DEAL_CLOSED in this period
+    // Strictly counts each lead once, preventing double counting from duplicate history or payment actions
+    prisma.lead.count({
       where: {
-        stage: "DEAL_CLOSED",
-        changedAt: { gte: start, lt: end },
-        lead: { assignedToId: salesPersonId },
+        assignedToId: salesPersonId,
+        funnelStage: "DEAL_CLOSED",
+        statusHistory: {
+          some: {
+            stage: "DEAL_CLOSED",
+            changedAt: { gte: start, lt: end },
+          },
+        },
       },
     }),
 
-    // Number of site visits done in this period
-    prisma.leadStatusHistory.count({
+    // Number of distinct leads with site visits done in this period
+    prisma.lead.count({
       where: {
-        stage: "SITE_VISIT_DONE",
-        changedAt: { gte: start, lt: end },
-        lead: { assignedToId: salesPersonId },
+        assignedToId: salesPersonId,
+        statusHistory: {
+          some: {
+            stage: "SITE_VISIT_DONE",
+            changedAt: { gte: start, lt: end },
+          },
+        },
       },
     }),
 

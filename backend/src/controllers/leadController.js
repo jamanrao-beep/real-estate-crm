@@ -293,7 +293,10 @@ async function updateFunnelStage(req, res) {
       return res.status(403).json({ error: "You can only update leads you referred" });
     }
 
-    const [updatedLead] = await prisma.$transaction([
+    // Strictly prevent duplicate conversion / status events if already at this stage
+    if (lead.funnelStage === stage) {
+      return res.json(lead);
+    }
       prisma.lead.update({
         where: { id },
         data: { funnelStage: stage },
@@ -432,11 +435,9 @@ async function receiveWebhookLead(req, res) {
 
     console.log(`[Webhook] Created new lead: ${newLead.name} (${newLead.phone})`);
 
-    // Trigger automated WhatsApp greeting via ChatMitra Bot
-    const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
-    sendChatMitraLeadGreeting(newLead).catch((err) =>
-      console.error(`[Webhook] WhatsApp greeting error for ${newLead.name}:`, err.message)
-    );
+    // Automated WhatsApp greeting disabled ("bot ka chakkar hata do")
+    // const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
+    // sendChatMitraLeadGreeting(newLead).catch((err) => ...);
 
     return res.status(201).json({ success: true, lead: newLead });
   } catch (err) {
