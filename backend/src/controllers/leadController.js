@@ -91,37 +91,62 @@ async function assignLead(req, res) {
 
 // POST /api/leads/auto-assign
 // High-performance round-robin auto-assignment for large volumes (1,000+ leads)
+// Accepts optional body: { salesPersonIds?: string[] }
 async function autoAssignLeads(req, res) {
   try {
-    const [unassignedLeads, activeSalesPeople] = await Promise.all([
+    const { salesPersonIds } = req.body || {};
+
+    const [unassignedLeads, allSalesPeople] = await Promise.all([
       prisma.lead.findMany({ 
         where: { assignedToId: null, status: "ACTIVE" },
         select: { id: true },
         orderBy: { dateReceived: "desc" }
       }),
       prisma.user.findMany({ 
-        where: { role: "SALES_PERSON", isActive: true },
-        select: { id: true, name: true }
+        where: { role: "SALES_PERSON" },
+        select: { id: true, name: true, isActive: true },
+        orderBy: { name: "asc" }
       }),
     ]);
 
     if (unassignedLeads.length === 0) {
-      return res.json({ assignedCount: 0, message: "No unassigned leads found" });
+      return res.json({ assignedCount: 0, message: "No unassigned leads found in the inbox" });
     }
 
-    if (activeSalesPeople.length === 0) {
-      return res.status(400).json({ error: "No active sales people to assign to" });
+    // Determine target sales people:
+    // If specific salesPersonIds passed in request, filter by them
+    // Otherwise filter by isActive: true
+    let targetSalesPeople = [];
+    if (Array.isArray(salesPersonIds) && salesPersonIds.length > 0) {
+      const idSet = new Set(salesPersonIds);
+      targetSalesPeople = allSalesPeople.filter(sp => idSet.has(sp.id));
+    } else {
+      targetSalesPeople = allSalesPeople.filter(sp => sp.isActive);
+    }
+
+    if (targetSalesPeople.length === 0) {
+      return res.status(400).json({ 
+        error: "No active or selected sales people available to receive leads. Please enable at least 1 sales executive." 
+      });
     }
 
     // Group lead IDs by sales person for bulk updateMany
     const salesPersonLeadsMap = new Map();
-    activeSalesPeople.forEach(sp => salesPersonLeadsMap.set(sp.id, []));
+    targetSalesPeople.forEach(sp => salesPersonLeadsMap.set(sp.id, []));
 
-    const adminId = req.user?.userId || req.user?.id || activeSalesPeople[0]?.id;
+    let adminId = req.user?.userId || req.user?.id;
+    if (adminId) {
+      const userExists = await prisma.user.findUnique({ where: { id: adminId }, select: { id: true } });
+      if (!userExists) adminId = null;
+    }
+    if (!adminId) {
+      const fallbackAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } });
+      adminId = fallbackAdmin?.id || targetSalesPeople[0]?.id;
+    }
 
     const historyRows = [];
     unassignedLeads.forEach((lead, index) => {
-      const salesPerson = activeSalesPeople[index % activeSalesPeople.length];
+      const salesPerson = targetSalesPeople[index % targetSalesPeople.length];
       salesPersonLeadsMap.get(salesPerson.id).push(lead.id);
       historyRows.push({
         leadId: lead.id,
@@ -151,9 +176,13 @@ async function autoAssignLeads(req, res) {
       }).catch(err => console.error("Failed to log assignment history chunk:", err.message));
     }
 
+    const repNames = targetSalesPeople.map(sp => sp.name).join(", ");
+
     return res.json({ 
       assignedCount: unassignedLeads.length,
-      message: `Successfully distributed ${unassignedLeads.length} leads across ${activeSalesPeople.length} sales reps!`
+      assignedRepsCount: targetSalesPeople.length,
+      assignedReps: repNames,
+      message: `Successfully distributed ${unassignedLeads.length} leads across ${targetSalesPeople.length} executives: ${repNames}!`
     });
   } catch (err) {
     console.error("Auto-assignment failed:", err);

@@ -78,7 +78,8 @@ async function getAllUsers(req, res) {
   try {
     const users = await prisma.user.findMany({
       where: { role: "SALES_PERSON" },
-      select: { id: true, name: true, email: true }
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+      orderBy: { name: "asc" }
     });
     return res.json(users);
   } catch (err) {
@@ -86,8 +87,31 @@ async function getAllUsers(req, res) {
   }
 }
 
+async function toggleUserAvailability(req, res) {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({ error: "isActive must be a boolean" });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { isActive },
+      select: { id: true, name: true, email: true, role: true, isActive: true }
+    });
+
+    return res.json(updatedUser);
+  } catch (err) {
+    console.error("Failed to toggle user availability:", err);
+    return res.status(500).json({ error: "Failed to update user availability: " + err.message });
+  }
+}
+
 module.exports = {
   createUser,
   login,
-  getAllUsers
+  getAllUsers,
+  toggleUserAvailability
 };

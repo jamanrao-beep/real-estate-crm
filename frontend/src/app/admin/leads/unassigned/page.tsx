@@ -20,11 +20,15 @@ import {
   Phone, 
   Mail, 
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  UserCheck,
+  UserX,
+  SlidersHorizontal
 } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
 import WhatsAppChatModal from "@/components/WhatsAppChatModal";
 import AddLeadModal from "@/components/AddLeadModal";
+import TeamDistributionModal, { SalesMember } from "@/components/TeamDistributionModal";
 
 interface Lead {
   id: string;
@@ -40,20 +44,16 @@ interface Lead {
   aiChatHistory?: any;
 }
 
-interface SalesPerson {
-  id: string;
-  name: string;
-  email?: string;
-}
-
 export default function UnassignedLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [salesTeam, setSalesTeam] = useState<SalesPerson[]>([]);
+  const [salesTeam, setSalesTeam] = useState<SalesMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDistributing, setIsDistributing] = useState(false);
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [togglingRepId, setTogglingRepId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedWhatsAppLead, setSelectedWhatsAppLead] = useState<Lead | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
@@ -73,12 +73,13 @@ export default function UnassignedLeadsPage() {
         console.error("Failed to fetch unassigned leads", leadErr);
       }
 
-      // 2. Fetch sales representatives for lead assignment
+      // 2. Fetch sales representatives for lead assignment & distribution
       try {
         const teamRes = await api.get("/auth/users");
-        setSalesTeam(Array.isArray(teamRes.data) ? teamRes.data : []);
+        const allUsers = Array.isArray(teamRes.data) ? teamRes.data : [];
+        const salesOnly = allUsers.filter((u: any) => u.role === "SALES_PERSON" || u.role === "SALES");
+        setSalesTeam(salesOnly.length > 0 ? salesOnly : allUsers);
       } catch (teamErr) {
-        // Fallback to /reports/sales-team if needed
         try {
           const fallbackRes = await api.get("/reports/sales-team");
           setSalesTeam(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
@@ -94,6 +95,26 @@ export default function UnassignedLeadsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleToggleDutyStatus = async (rep: SalesMember) => {
+    const newStatus = !rep.isActive;
+    setTogglingRepId(rep.id);
+    try {
+      await api.patch(`/auth/users/${rep.id}/availability`, { isActive: newStatus });
+      setSalesTeam((prev) =>
+        prev.map((m) => (m.id === rep.id ? { ...m, isActive: newStatus } : m))
+      );
+      setSuccessMessage(
+        `${rep.name} is now ${newStatus ? "On Duty (Receiving leads)" : "On Leave (Excluded from leads)"}`
+      );
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: any) {
+      console.error("Failed to toggle duty status", err);
+      alert("Failed to update status. Please try again.");
+    } finally {
+      setTogglingRepId(null);
+    }
+  };
 
   const handleSyncSheet = async () => {
     setIsSyncingSheet(true);
@@ -131,26 +152,13 @@ export default function UnassignedLeadsPage() {
     }
   };
 
-  const handleAutoDistribute = async () => {
-    if (leads.length === 0) return;
-    if (salesTeam.length === 0) {
-      alert("No active sales team members found to assign leads to.");
+  // Open selective distribution modal
+  const handleOpenDistributionModal = () => {
+    if (leads.length === 0) {
+      alert("There are no unassigned leads in the inbox to distribute.");
       return;
     }
-
-    setIsDistributing(true);
-    try {
-      const res = await api.post("/leads/auto-assign");
-      const count = res.data.assignedCount ?? leads.length;
-      setSuccessMessage(`Successfully auto-distributed ${count} leads evenly across ${salesTeam.length} sales reps!`);
-      fetchData();
-      setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      console.error("Auto-assign failed", err);
-      alert(err.response?.data?.error || "Failed to auto-distribute leads");
-    } finally {
-      setIsDistributing(false);
-    }
+    setIsDistributionModalOpen(true);
   };
 
   // Filtered Leads
@@ -289,13 +297,125 @@ export default function UnassignedLeadsPage() {
 
           <Button
             size="sm"
-            onClick={handleAutoDistribute}
-            disabled={isDistributing || leads.length === 0}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm font-semibold bg-ink text-surface hover:bg-ink/90"
+            onClick={handleOpenDistributionModal}
+            disabled={leads.length === 0}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm font-semibold bg-accent hover:bg-accent/90 text-surface shadow-xs"
           >
             <Users size={14} />
-            Auto-Distribute All
+            Auto-Distribute ({leads.length})
           </Button>
+        </div>
+      </div>
+
+      {/* SALES TEAM DUTY ROSTER & SELECTIVE DISTRIBUTION WIDGET */}
+      <div className="bg-surface border border-border rounded-xl p-4 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/70">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-accent/10 text-accent">
+              <Users size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-ink">Sales Team Duty Roster & Selective Lead Distribution</h2>
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                    salesTeam.filter((m) => m.isActive).length > 0
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-danger/10 text-danger border-danger/20"
+                  }`}
+                >
+                  {salesTeam.filter((m) => m.isActive).length} of {salesTeam.length} On Duty
+                </span>
+              </div>
+              <p className="text-xs text-ink-soft mt-0.5">
+                Toggle sales executives on leave to exclude them from automatic lead distribution.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            onClick={handleOpenDistributionModal}
+            disabled={leads.length === 0}
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-ink text-surface hover:bg-ink/90 h-9 shrink-0"
+          >
+            <Sparkles size={14} className="text-accent" />
+            <span>Selective Distribution Settings</span>
+          </Button>
+        </div>
+
+        {/* Reps Duty Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+          {salesTeam.length === 0 ? (
+            <div className="col-span-full p-4 text-center text-xs text-ink-soft">
+              No sales executives registered in the system.
+            </div>
+          ) : (
+            salesTeam.map((rep) => {
+              const isToggling = togglingRepId === rep.id;
+              const initials = rep.name
+                ? rep.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()
+                : "SP";
+
+              return (
+                <div
+                  key={rep.id}
+                  className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 transition-all ${
+                    rep.isActive
+                      ? "bg-bg/60 border-emerald-500/30 shadow-2xs"
+                      : "bg-bg/25 border-border opacity-70"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                        rep.isActive
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          : "bg-ink-soft/15 text-ink-soft"
+                      }`}
+                    >
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-ink truncate">{rep.name}</div>
+                      <div className="flex items-center gap-1 text-[11px] mt-0.5">
+                        {rep.isActive ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            On Duty
+                          </span>
+                        ) : (
+                          <span className="text-ink-soft font-medium flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-ink-soft/40"></span>
+                            On Leave
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isToggling}
+                    onClick={() => handleToggleDutyStatus(rep)}
+                    className={`text-[10px] px-2.5 py-1 rounded-lg border font-semibold transition-all shrink-0 ${
+                      rep.isActive
+                        ? "border-border text-ink-soft hover:bg-danger/10 hover:text-danger hover:border-danger/30 bg-surface"
+                        : "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                    }`}
+                    title={rep.isActive ? "Mark On Leave (exclude from receiving leads)" : "Mark On Duty (eligible for leads)"}
+                  >
+                    {isToggling ? "Saving..." : rep.isActive ? "Set Leave" : "Set Duty"}
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -485,7 +605,7 @@ export default function UnassignedLeadsPage() {
                             </option>
                             {salesTeam.map((rep) => (
                               <option key={rep.id} value={rep.id}>
-                                👤 {rep.name}
+                                👤 {rep.name} {!rep.isActive ? "(On Leave)" : ""}
                               </option>
                             ))}
                           </Select>
@@ -597,7 +717,7 @@ export default function UnassignedLeadsPage() {
                     </option>
                     {salesTeam.map((rep) => (
                       <option key={rep.id} value={rep.id}>
-                        👤 {rep.name}
+                        👤 {rep.name} {!rep.isActive ? "(On Leave)" : ""}
                       </option>
                     ))}
                   </Select>
@@ -618,6 +738,20 @@ export default function UnassignedLeadsPage() {
             prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
           );
           setSelectedWhatsAppLead((prev) => (prev?.id === updatedLead.id ? { ...prev, ...updatedLead } : prev));
+        }}
+      />
+
+      {/* Selective Lead Distribution Modal */}
+      <TeamDistributionModal
+        isOpen={isDistributionModalOpen}
+        onClose={() => setIsDistributionModalOpen(false)}
+        unassignedCount={leads.length}
+        salesTeam={salesTeam}
+        onTeamUpdated={fetchData}
+        onSuccess={(msg) => {
+          setSuccessMessage(msg);
+          fetchData();
+          setTimeout(() => setSuccessMessage(""), 5000);
         }}
       />
     </div>
