@@ -58,6 +58,7 @@ async function sendChatMitraLeadGreeting(lead) {
   const greetingBody = `👋 Welcome to Badri Kedar Developer!\nWe help you find the right property — plots, flats & commercial spaces.\n\nNice to meet you, ${clientName}! What are you looking for today?\n1️⃣ 🏠 Residential Property\n2️⃣ 🏢 Commercial Property\n3️⃣ 🌳 Plot / Land\n4️⃣ 📍 Book a Free VIP Site Visit\n5️⃣ 📋 Speak with Property Advisor / Brochure\n\nPlease reply with 1, 2, 3, 4, or 5 to get started! 🙂`;
 
   // 1. Try sending official Meta-approved template first (bypasses 24h customer window)
+  const templateName = process.env.CHATMITRA_TEMPLATE_NAME || "bkd_welcome_greeting_20260908112628";
   try {
     const templatePayload = {
       recipient_mobile_number: cleanPhone,
@@ -66,7 +67,7 @@ async function sendChatMitraLeadGreeting(lead) {
         {
           kind: "template",
           template: {
-            name: "bkd_welcome_greeting",
+            name: templateName,
             language: "en",
             components: [
               {
@@ -93,7 +94,7 @@ async function sendChatMitraLeadGreeting(lead) {
     });
 
     if (templateRes.data?.send_status === "completed" || templateRes.data?.sent_count > 0) {
-      console.log(`[ChatMitra] Sent template greeting 'bkd_welcome_greeting' to ${clientName} (${cleanPhone})`);
+      console.log(`[ChatMitra] Sent template greeting '${templateName}' to ${clientName} (${cleanPhone})`);
 
       if (lead.id) {
         const currentHistory = Array.isArray(lead.aiChatHistory) ? lead.aiChatHistory : [];
@@ -103,7 +104,7 @@ async function sendChatMitraLeadGreeting(lead) {
           timestamp: new Date().toISOString(),
           channel: "whatsapp_chatmitra",
           status: "sent",
-          template: "bkd_welcome_greeting"
+          template: templateName
         });
 
         await prisma.lead.update({
