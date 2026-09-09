@@ -214,7 +214,7 @@ export default function PerformanceDashboard() {
                           <span className="font-mono font-medium">{r.siteVisitsDone}</span>
                         </div>
                         <div className="flex items-center gap-2 text-ink">
-                          <span className="text-sm text-ink-soft">Calls ({r.callHours}h)</span>
+                          <span className="text-sm text-ink-soft">Calls</span>
                           <span className="font-mono font-medium">{r.numberOfCalls}</span>
                           <Phone size={14} className="text-ink-soft" />
                         </div>
