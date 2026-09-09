@@ -37,6 +37,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
   const [previewHeaders, setPreviewHeaders] = useState<string[]>([]);
   const [defaultSource, setDefaultSource] = useState("Excel Bulk Import");
   const [isLoading, setIsLoading] = useState(false);
+  const [importProgress, setImportProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -253,8 +254,6 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
 
     reader.readAsArrayBuffer(uploadedFile);
   };
-
-  const [importProgress, setImportProgress] = useState<string | null>(null);
 
   const handleImportSubmit = async () => {
     if (parsedData.length === 0) return;
