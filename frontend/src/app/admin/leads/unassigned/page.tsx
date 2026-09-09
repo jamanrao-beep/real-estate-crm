@@ -344,6 +344,7 @@ export default function UnassignedLeadsPage() {
       <AddLeadModal
         isOpen={isAddLeadModalOpen}
         onClose={() => setIsAddLeadModalOpen(false)}
+        onOpenExcel={() => setIsExcelModalOpen(true)}
         onSuccess={(msg) => {
           setSuccessMessage(msg);
           fetchData();

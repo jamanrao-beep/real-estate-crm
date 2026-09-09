@@ -12,7 +12,8 @@ import {
   AlertCircle, 
   X, 
   Loader2,
-  Table as TableIcon
+  Table as TableIcon,
+  Download
 } from "lucide-react";
 
 interface ExcelImportModalProps {
@@ -56,6 +57,36 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
     }
   };
 
+  const downloadSampleTemplate = () => {
+    const sampleData = [
+      {
+        "Full Name": "Rahul Sharma",
+        "Phone Number": "9876543210",
+        "Email": "rahul.sharma@example.com",
+        "Source": "Property Expo 2026",
+        "Notes": "Interested in 3 BHK near Dwarka Expressway"
+      },
+      {
+        "Full Name": "Pooja Verma",
+        "Phone Number": "9812345678",
+        "Email": "pooja.v@example.com",
+        "Source": "Meta Campaign",
+        "Notes": "Looking for residential plots in Sector 82"
+      },
+      {
+        "Full Name": "Amit Kumar",
+        "Phone Number": "9900112233",
+        "Email": "amit.k@example.com",
+        "Source": "Walk-in Lead",
+        "Notes": "Budget 75L, immediate booking planned"
+      }
+    ];
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Leads_Template");
+    XLSX.writeFile(wb, "crm_leads_sample_template.xlsx");
+  };
+
   const processFile = (uploadedFile: File) => {
     setError(null);
     setFile(uploadedFile);
@@ -63,24 +94,60 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: "binary" });
+        const buffer = evt.target?.result as ArrayBuffer;
+        if (!buffer) {
+          setError("Could not read file content. Please try again.");
+          return;
+        }
+
+        const data = new Uint8Array(buffer);
+        const wb = XLSX.read(data, { type: "array" });
+
+        if (!wb.SheetNames || wb.SheetNames.length === 0) {
+          setError("The uploaded workbook contains no sheets.");
+          setParsedData([]);
+          return;
+        }
+
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const rawJson: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        
+        // raw: false ensures cell text formatting is preserved (no scientific notation for phone numbers)
+        const rawJson: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
 
-        if (!rawJson || rawJson.length < 2) {
+        if (!rawJson || rawJson.length < 1) {
           setError("The uploaded file has no data rows. Please ensure it has a header row and data.");
           setParsedData([]);
           return;
         }
 
-        const headers = (rawJson[0] || []).map((h: any) => String(h || "").trim());
-        setPreviewHeaders(headers);
+        // Smart Header Row Detection (scans first 10 rows for known header keywords)
+        const headerKeywords = [
+          "name", "phone", "mobile", "contact", "email", "mail", "lead", "client", "customer", "number", "tel", "cell"
+        ];
+
+        let headerRowIdx = 0;
+        let bestHeaderScore = -1;
+
+        for (let r = 0; r < Math.min(rawJson.length, 10); r++) {
+          const row = rawJson[r] || [];
+          const rowText = row.map((c: any) => String(c || "").toLowerCase().trim()).join(" ");
+          let score = 0;
+          for (const kw of headerKeywords) {
+            if (rowText.includes(kw)) score++;
+          }
+          if (score > bestHeaderScore && score >= 1) {
+            bestHeaderScore = score;
+            headerRowIdx = r;
+          }
+        }
+
+        const headers = (rawJson[headerRowIdx] || []).map((h: any) => String(h || "").trim());
+        setPreviewHeaders(headers.filter(Boolean));
 
         const lowerHeaders = headers.map(h => h.toLowerCase());
 
-        // Helper to find column index
+        // Helper to find column index with multiple potential aliases
         const getColIdx = (keywords: string[]) => {
           for (const kw of keywords) {
             const idx = lowerHeaders.findIndex(h => h.includes(kw));
@@ -89,63 +156,102 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
           return -1;
         };
 
-        const nameIdx = getColIdx(["name", "full name", "client", "customer", "lead name"]);
-        const phoneIdx = getColIdx(["phone", "mobile", "contact", "number", "tel", "cell"]);
-        const emailIdx = getColIdx(["email", "mail"]);
-        const sourceIdx = getColIdx(["source", "campaign", "platform", "channel"]);
-        const notesIdx = getColIdx(["note", "comment", "remark", "detail", "query", "requirement"]);
+        const firstNameIdx = getColIdx(["first name", "firstname"]);
+        const lastNameIdx = getColIdx(["last name", "lastname"]);
+        const nameIdx = getColIdx([
+          "full name", "fullname", "client name", "customer name", "lead name", 
+          "party name", "prospect", "contact person", "name", "client", "customer"
+        ]);
+        const phoneIdx = getColIdx([
+          "mobile number", "mobile no", "mobile_no", "phone number", "phone no", "phone_no", 
+          "contact number", "contact no", "contact_no", "whatsapp no", "whatsapp number", 
+          "mobile", "phone", "contact", "whatsapp", "number", "tel", "cell"
+        ]);
+        const emailIdx = getColIdx(["email address", "email id", "email_id", "email", "mail", "e-mail"]);
+        const sourceIdx = getColIdx(["lead source", "source", "campaign", "platform", "channel", "medium"]);
+        const notesIdx = getColIdx([
+          "notes", "note", "remark", "remarks", "comment", "comments", "detail", "details", 
+          "query", "requirement", "budget", "property", "project", "location", "city"
+        ]);
 
         const leads: ParsedLead[] = [];
 
-        for (let r = 1; r < rawJson.length; r++) {
+        for (let r = headerRowIdx + 1; r < rawJson.length; r++) {
           const row = rawJson[r];
           if (!row || row.length === 0) continue;
 
-          let rawName = nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "";
+          // 1. Extract Name
+          let rawName = "";
+          if (firstNameIdx !== -1 || lastNameIdx !== -1) {
+            const fn = firstNameIdx !== -1 ? String(row[firstNameIdx] || "").trim() : "";
+            const ln = lastNameIdx !== -1 ? String(row[lastNameIdx] || "").trim() : "";
+            rawName = `${fn} ${ln}`.trim();
+          }
+          if (!rawName && nameIdx !== -1) {
+            rawName = String(row[nameIdx] || "").trim();
+          }
+
+          // 2. Extract Phone
           let rawPhone = phoneIdx !== -1 ? String(row[phoneIdx] || "").trim() : "";
           let rawEmail = emailIdx !== -1 ? String(row[emailIdx] || "").trim() : "";
           let rawSource = sourceIdx !== -1 ? String(row[sourceIdx] || "").trim() : "";
           let rawNotes = notesIdx !== -1 ? String(row[notesIdx] || "").trim() : "";
 
-          // If phone wasn't found at designated column, try to find any column with digits
+          // Fallback phone detection: scan cells for any 10-13 digit sequence
           if (!rawPhone) {
             for (let c = 0; c < row.length; c++) {
-              const val = String(row[c] || "").trim();
-              if (val.replace(/[^\d]/g, "").length >= 7) {
-                rawPhone = val;
+              if (c === nameIdx || c === firstNameIdx || c === lastNameIdx || c === emailIdx) continue;
+              const cellVal = String(row[c] || "").trim();
+              const digitsOnly = cellVal.replace(/[^\d]/g, "");
+              if (digitsOnly.length >= 10 && digitsOnly.length <= 13) {
+                rawPhone = cellVal;
                 break;
               }
             }
           }
 
-          // Clean phone
-          const cleanPhone = rawPhone.replace(/^p:/i, "").trim();
+          // Fallback name detection: scan cells for a plausible name
+          if (!rawName) {
+            for (let c = 0; c < row.length; c++) {
+              if (c === phoneIdx || c === emailIdx) continue;
+              const cellVal = String(row[c] || "").trim();
+              if (cellVal && !cellVal.includes("@") && cellVal.replace(/[^\d]/g, "").length < 4 && cellVal.length >= 2 && cellVal.length <= 40) {
+                rawName = cellVal;
+                break;
+              }
+            }
+          }
+
+          // Clean phone number (strip 'p:', spaces, dashes)
+          const cleanPhone = rawPhone.replace(/^p:/i, "").replace(/[^\d+]/g, "").trim();
 
           if (!cleanPhone && !rawName && !rawEmail) {
-            continue; // Skip empty row
+            continue; // Skip entirely empty row
           }
 
           leads.push({
-            name: rawName || (cleanPhone ? `Lead (${cleanPhone})` : `Lead #${r}`),
-            phone: cleanPhone,
-            email: rawEmail,
+            name: rawName || (cleanPhone ? `Lead (${cleanPhone})` : `Lead #${leads.length + 1}`),
+            phone: cleanPhone || "N/A",
+            email: rawEmail || "",
             source: rawSource || defaultSource,
             notes: rawNotes,
           });
         }
 
         if (leads.length === 0) {
-          setError("Could not detect valid lead records. Please ensure phone numbers or names are present.");
+          setError("Could not detect valid lead records. Please ensure your sheet has names or phone numbers.");
+          setParsedData([]);
         } else {
           setParsedData(leads);
         }
       } catch (err: any) {
         console.error("Failed to parse sheet:", err);
-        setError("Failed to read Excel file. Make sure it is a valid .xlsx, .xls, or .csv file.");
+        setError("Failed to read Excel file. Please ensure it is a valid .xlsx, .xls, or .csv file.");
+        setParsedData([]);
       }
     };
 
-    reader.readAsBinaryString(uploadedFile);
+    reader.readAsArrayBuffer(uploadedFile);
   };
 
   const handleImportSubmit = async () => {
@@ -161,11 +267,18 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
       });
 
       const { importedCount, duplicateCount } = res.data;
-      onSuccess(`Successfully imported ${importedCount} leads${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ""}!`);
+      
+      if (importedCount === 0 && duplicateCount > 0) {
+        setError(`All ${duplicateCount} leads in this file already exist in your CRM database.`);
+        setIsLoading(false);
+        return;
+      }
+
+      onSuccess(`Successfully imported ${importedCount} leads${duplicateCount > 0 ? ` (${duplicateCount} existing duplicates skipped)` : ""}!`);
       handleClose();
     } catch (err: any) {
       console.error("Import failed:", err);
-      setError(err.response?.data?.error || "Failed to import leads. Please try again.");
+      setError(err.response?.data?.error || "Failed to import leads. Please check your file or try again.");
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +298,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-border bg-bg/50">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               <FileSpreadsheet size={24} />
             </div>
             <div>
@@ -213,33 +326,50 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
 
           {/* Upload Area */}
           {!parsedData.length ? (
-            <div 
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-border hover:border-accent/60 bg-bg/30 hover:bg-accent/5 rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 group"
-            >
-              <input 
-                ref={fileInputRef}
-                type="file" 
-                accept=".xlsx, .xls, .csv" 
-                className="hidden" 
-                onChange={handleFileChange}
-              />
-              <div className="p-4 rounded-full bg-surface shadow-sm border border-border group-hover:scale-110 transition-transform">
-                <UploadCloud size={32} className="text-accent" />
+            <div className="space-y-3">
+              <div 
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-border hover:border-accent/60 bg-bg/30 hover:bg-accent/5 rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 group"
+              >
+                <input 
+                  ref={fileInputRef}
+                  type="file" 
+                  accept=".xlsx, .xls, .csv" 
+                  className="hidden" 
+                  onChange={handleFileChange}
+                />
+                <div className="p-4 rounded-full bg-surface shadow-sm border border-border group-hover:scale-110 transition-transform">
+                  <UploadCloud size={32} className="text-accent" />
+                </div>
+                <div>
+                  <p className="font-semibold text-ink text-sm sm:text-base">
+                    Click to browse or drag and drop your sheet
+                  </p>
+                  <p className="text-xs text-ink-soft mt-1">
+                    Supports Excel (.xlsx, .xls) and CSV (.csv) with up to thousands of leads
+                  </p>
+                </div>
+                <span className="inline-block px-3 py-1 bg-surface border border-border text-[11px] font-mono text-ink-soft rounded-full mt-2">
+                  Recognized columns: Name, Mobile / Phone, Email, Source, Notes / Query
+                </span>
               </div>
-              <div>
-                <p className="font-semibold text-ink text-sm sm:text-base">
-                  Click to browse or drag and drop your sheet
-                </p>
-                <p className="text-xs text-ink-soft mt-1">
-                  Supports Excel (.xlsx, .xls) and CSV (.csv) with up to thousands of leads
-                </p>
+
+              {/* Sample Template Download */}
+              <div className="flex items-center justify-between p-3 bg-bg/40 border border-border rounded-xl text-xs">
+                <span className="text-ink-soft">Need an example template to get started?</span>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={downloadSampleTemplate}
+                  className="h-8 text-xs flex items-center gap-1.5"
+                >
+                  <Download size={13} />
+                  Download Sample Excel
+                </Button>
               </div>
-              <span className="inline-block px-3 py-1 bg-surface border border-border text-[11px] font-mono text-ink-soft rounded-full mt-2">
-                Expected Columns: Name, Phone Number, Email, Source/Notes
-              </span>
             </div>
           ) : (
             <div className="space-y-4">
@@ -281,7 +411,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
               {/* Preview Table */}
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-soft uppercase tracking-wider mb-2">
-                  <TableIcon size={14} /> Preview (First 4 rows):
+                  <TableIcon size={14} /> Preview (First 5 rows):
                 </div>
                 <div className="border border-border rounded-xl overflow-x-auto bg-bg/30">
                   <table className="w-full text-left text-xs border-collapse">
@@ -295,7 +425,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {parsedData.slice(0, 4).map((row, idx) => (
+                      {parsedData.slice(0, 5).map((row, idx) => (
                         <tr key={idx}>
                           <td className="p-2.5 text-ink-soft font-mono">{idx + 1}</td>
                           <td className="p-2.5 font-medium text-ink">{row.name}</td>
@@ -307,9 +437,9 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
                     </tbody>
                   </table>
                 </div>
-                {parsedData.length > 4 && (
+                {parsedData.length > 5 && (
                   <p className="text-[11px] text-ink-soft mt-1.5 text-right">
-                    + {parsedData.length - 4} more leads will be imported
+                    + {parsedData.length - 5} more leads will be imported
                   </p>
                 )}
               </div>

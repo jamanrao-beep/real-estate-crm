@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { X, UserPlus, Loader2, AlertCircle } from "lucide-react";
+import { X, UserPlus, Loader2, AlertCircle, FileSpreadsheet } from "lucide-react";
 
 interface SalesPerson {
   id: string;
@@ -17,6 +17,7 @@ interface AddLeadModalProps {
   onClose: () => void;
   onSuccess: (message: string) => void;
   defaultAssignedToId?: string;
+  onOpenExcel?: () => void;
 }
 
 export default function AddLeadModal({
@@ -24,6 +25,7 @@ export default function AddLeadModal({
   onClose,
   onSuccess,
   defaultAssignedToId = "",
+  onOpenExcel,
 }: AddLeadModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -129,6 +131,27 @@ export default function AddLeadModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4">
+          {onOpenExcel && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="text-xs text-ink font-medium">Have an Excel or CSV file with multiple leads?</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  handleClose();
+                  onOpenExcel();
+                }}
+                className="h-7 px-2.5 text-xs border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 font-medium shrink-0"
+              >
+                Import Excel
+              </Button>
+            </div>
+          )}
+
           {error && (
             <div className="p-3 bg-danger/10 border border-danger/30 rounded-xl text-danger text-xs sm:text-sm flex items-start gap-2">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />

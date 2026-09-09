@@ -196,6 +196,7 @@ export default function AllLeadsPage() {
       <AddLeadModal
         isOpen={isAddLeadModalOpen}
         onClose={() => setIsAddLeadModalOpen(false)}
+        onOpenExcel={() => setIsExcelModalOpen(true)}
         onSuccess={(msg) => {
           setSyncMessage(msg);
           fetchLeads();

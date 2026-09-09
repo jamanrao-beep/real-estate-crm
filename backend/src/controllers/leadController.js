@@ -432,8 +432,21 @@ async function importBulkLeads(req, res) {
     const existingLeads = await prisma.lead.findMany({
       select: { phone: true, email: true }
     });
-    const existingPhones = new Set(existingLeads.map(l => l.phone).filter(Boolean));
-    const existingEmails = new Set(existingLeads.map(l => l.email).filter(Boolean));
+
+    const normalizePhone10 = (p) => {
+      if (!p) return "";
+      const digits = String(p).replace(/[^\d]/g, "");
+      return digits.length >= 10 ? digits.slice(-10) : digits;
+    };
+
+    const existingPhones = new Set();
+    const existingEmails = new Set();
+
+    existingLeads.forEach(l => {
+      const p10 = normalizePhone10(l.phone);
+      if (p10) existingPhones.add(p10);
+      if (l.email && l.email.includes("@")) existingEmails.add(l.email.toLowerCase().trim());
+    });
 
     const newLeadsToInsert = [];
     let duplicateCount = 0;
@@ -443,14 +456,14 @@ async function importBulkLeads(req, res) {
       const item = leads[i];
       let name = item.name ? String(item.name).trim() : "";
       let rawPhone = item.phone ? String(item.phone).trim() : "";
-      let email = item.email ? String(item.email).trim() : "";
+      let rawEmail = item.email ? String(item.email).trim() : "";
       let source = item.source ? String(item.source).trim() : (defaultSource || "Excel Import");
       let notes = item.notes ? String(item.notes).trim() : null;
 
       // Clean phone: remove 'p:', spaces, special chars except digits and plus
       let phone = rawPhone.replace(/^p:/i, "").replace(/[^\d+]/g, "").trim();
 
-      if (!phone && !name && !email) {
+      if (!phone && !name && !rawEmail) {
         skippedCount++;
         continue;
       }
@@ -459,18 +472,23 @@ async function importBulkLeads(req, res) {
         name = phone ? `Lead (${phone})` : `Lead #${i + 1}`;
       }
 
+      const p10 = normalizePhone10(phone);
+      const emailLower = rawEmail.includes("@") ? rawEmail.toLowerCase().trim() : "";
+
       // Check duplicates
-      if (phone && existingPhones.has(phone)) {
+      const isPlaceholderEmail = !emailLower || ["none@", "noemail@", "na@", "test@", "info@"].some(p => emailLower.startsWith(p));
+
+      if (p10 && existingPhones.has(p10)) {
         duplicateCount++;
         continue;
       }
-      if (email && existingEmails.has(email)) {
+      if (emailLower && !isPlaceholderEmail && existingEmails.has(emailLower)) {
         duplicateCount++;
         continue;
       }
 
-      if (phone) existingPhones.add(phone);
-      if (email) existingEmails.add(email);
+      if (p10) existingPhones.add(p10);
+      if (emailLower && !isPlaceholderEmail) existingEmails.add(emailLower);
 
       let parsedDate = item.dateReceived ? new Date(item.dateReceived) : new Date();
       if (isNaN(parsedDate.getTime())) parsedDate = new Date();
@@ -478,8 +496,10 @@ async function importBulkLeads(req, res) {
       newLeadsToInsert.push({
         name,
         phone: phone || "N/A",
-        email: email || "",
+        email: emailLower || "",
         source,
+        category: "WARM",
+        funnelStage: "INTERESTED",
         formAnswers: {
           importedFrom: "Excel/CSV",
           notes: notes,
