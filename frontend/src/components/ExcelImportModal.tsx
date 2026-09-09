@@ -254,33 +254,68 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
     reader.readAsArrayBuffer(uploadedFile);
   };
 
+  const [importProgress, setImportProgress] = useState<string | null>(null);
+
   const handleImportSubmit = async () => {
     if (parsedData.length === 0) return;
 
     setIsLoading(true);
     setError(null);
+    setImportProgress("Starting import...");
 
     try {
-      const res = await api.post("/leads/import-bulk", {
-        leads: parsedData,
-        defaultSource: defaultSource || "Excel Bulk Import"
-      });
+      const CHUNK_SIZE = 200;
+      const totalLeads = parsedData.length;
+      let totalImported = 0;
+      let totalDuplicates = 0;
+      let totalSkipped = 0;
 
-      const { importedCount, duplicateCount } = res.data;
-      
-      if (importedCount === 0 && duplicateCount > 0) {
-        setError(`All ${duplicateCount} leads in this file already exist in your CRM database.`);
+      const totalBatches = Math.ceil(totalLeads / CHUNK_SIZE);
+
+      for (let b = 0; b < totalBatches; b++) {
+        const start = b * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, totalLeads);
+        const chunk = parsedData.slice(start, end);
+
+        setImportProgress(`Importing batch ${b + 1} of ${totalBatches} (${end} / ${totalLeads} leads)...`);
+
+        const res = await api.post("/leads/import-bulk", {
+          leads: chunk,
+          defaultSource: defaultSource || "Excel Bulk Import"
+        });
+
+        totalImported += res.data?.importedCount || 0;
+        totalDuplicates += res.data?.duplicateCount || 0;
+        totalSkipped += res.data?.skippedCount || 0;
+      }
+
+      if (totalImported === 0 && totalDuplicates > 0) {
+        setError(`All ${totalDuplicates} leads in this file already exist in your CRM database (no duplicates added).`);
         setIsLoading(false);
+        setImportProgress(null);
         return;
       }
 
-      onSuccess(`Successfully imported ${importedCount} leads${duplicateCount > 0 ? ` (${duplicateCount} existing duplicates skipped)` : ""}!`);
+      onSuccess(`Successfully imported ${totalImported} leads${totalDuplicates > 0 ? ` (${totalDuplicates} existing duplicates skipped)` : ""}!`);
       handleClose();
     } catch (err: any) {
       console.error("Import failed:", err);
-      setError(err.response?.data?.error || "Failed to import leads. Please check your file or try again.");
+      let msg = "Failed to import leads. Please check your file or try again.";
+      if (err.response?.status === 413) {
+        msg = "The file payload was too large for the server. Try uploading in smaller parts.";
+      } else if (err.response?.data?.error) {
+        msg = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (typeof err.response?.data === "string" && err.response.data.length < 150) {
+        msg = err.response.data;
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setError(msg);
     } finally {
       setIsLoading(false);
+      setImportProgress(null);
     }
   };
 
@@ -288,6 +323,7 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
     setFile(null);
     setParsedData([]);
     setError(null);
+    setImportProgress(null);
     onClose();
   };
 
@@ -449,32 +485,42 @@ export default function ExcelImportModal({ isOpen, onClose, onSuccess }: ExcelIm
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-6 border-t border-border bg-bg/50 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handleClose} 
-            disabled={isLoading}
-            className="w-full sm:w-auto text-xs sm:text-sm h-10"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleImportSubmit} 
-            disabled={parsedData.length === 0 || isLoading}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs sm:text-sm h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Importing {parsedData.length} Leads...
-              </>
-            ) : (
-              <>
-                <FileSpreadsheet size={16} />
-                Import {parsedData.length > 0 ? `${parsedData.length} Leads` : "Leads"}
-              </>
+        <div className="p-4 sm:p-6 border-t border-border bg-bg/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-ink-soft w-full sm:w-auto text-left">
+            {isLoading && importProgress && (
+              <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium animate-pulse">
+                <Loader2 size={14} className="animate-spin shrink-0" />
+                {importProgress}
+              </span>
             )}
-          </Button>
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-end">
+            <Button 
+              variant="outline" 
+              onClick={handleClose} 
+              disabled={isLoading}
+              className="w-full sm:w-auto text-xs sm:text-sm h-10"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleImportSubmit} 
+              disabled={parsedData.length === 0 || isLoading}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs sm:text-sm h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  {importProgress || `Importing ${parsedData.length} Leads...`}
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet size={16} />
+                  Import {parsedData.length > 0 ? `${parsedData.length} Leads` : "Leads"}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
       </div>

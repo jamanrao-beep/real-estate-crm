@@ -494,16 +494,15 @@ async function importBulkLeads(req, res) {
       if (isNaN(parsedDate.getTime())) parsedDate = new Date();
 
       newLeadsToInsert.push({
-        name,
-        phone: phone || "N/A",
-        email: emailLower || "",
-        source,
+        name: name.slice(0, 250),
+        phone: (phone || "N/A").slice(0, 50),
+        email: emailLower.slice(0, 250),
+        source: (source || "Excel Import").slice(0, 200),
         category: "WARM",
         funnelStage: "INTERESTED",
         formAnswers: {
           importedFrom: "Excel/CSV",
-          notes: notes,
-          originalRow: item
+          notes: notes ? String(notes).slice(0, 1000) : null
         },
         status: "ACTIVE",
         dateReceived: parsedDate,
@@ -511,13 +510,27 @@ async function importBulkLeads(req, res) {
     }
 
     if (newLeadsToInsert.length > 0) {
-      // Chunk insertions into batches of 200 for maximum performance with Neon DB
-      const batchSize = 200;
+      // Chunk insertions into batches of 100 for maximum performance with Neon DB
+      const batchSize = 100;
       for (let i = 0; i < newLeadsToInsert.length; i += batchSize) {
         const chunk = newLeadsToInsert.slice(i, i + batchSize);
-        await prisma.lead.createMany({
-          data: chunk
-        });
+        try {
+          await prisma.lead.createMany({
+            data: chunk
+          });
+        } catch (batchErr) {
+          console.warn(`[Bulk Import] Batch failed (${batchErr.message}), falling back to individual inserts`);
+          for (const leadItem of chunk) {
+            try {
+              await prisma.lead.create({
+                data: leadItem
+              });
+            } catch (singleErr) {
+              console.error(`[Bulk Import] Skipped problematic row (${leadItem.name}):`, singleErr.message);
+              skippedCount++;
+            }
+          }
+        }
       }
 
       // If user selected to send automated greetings to imported leads
@@ -533,13 +546,15 @@ async function importBulkLeads(req, res) {
       }
     }
 
+    const actualImported = Math.max(0, newLeadsToInsert.length - skippedCount);
+
     return res.json({
       success: true,
-      importedCount: newLeadsToInsert.length,
+      importedCount: actualImported,
       duplicateCount,
       skippedCount,
       totalCount: leads.length,
-      message: `Successfully imported ${newLeadsToInsert.length} new leads (${duplicateCount} duplicates skipped)!`
+      message: `Successfully imported ${actualImported} new leads (${duplicateCount} duplicates skipped)!`
     });
   } catch (err) {
     console.error("Bulk import failed:", err);
