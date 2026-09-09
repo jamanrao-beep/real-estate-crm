@@ -14,38 +14,32 @@ async function main() {
   const users = [
     // Admin
     {
-      name: 'Prashant S',
+      name: 'Prashant Singh',
       email: 'prashant@bkdcrm.com',
       password: 'Ps@2026',
       role: 'ADMIN',
     },
     // Sales Persons
     {
-      name: 'Aarti G',
+      name: 'Aarti Ghanata',
       email: 'aarti@bkdcrm.com',
       password: 'Ag@2026',
       role: 'SALES_PERSON',
     },
     {
-      name: 'Sapna A',
+      name: 'Sapna Arya',
       email: 'sapna@bkdcrm.com',
       password: 'Sa@2026',
       role: 'SALES_PERSON',
     },
     {
-      name: 'Manashvi B',
+      name: 'Manashvi Bisht',
       email: 'manashvi@bkdcrm.com',
       password: 'Mb@2026',
       role: 'SALES_PERSON',
     },
     {
-      name: 'Pramod SN',
-      email: 'pramod@bkdcrm.com',
-      password: 'Psn@2026',
-      role: 'SALES_PERSON',
-    },
-    {
-      name: 'Bharat J',
+      name: 'Bharat Jatwany',
       email: 'bharat@bkdcrm.com',
       password: 'Bj@2026',
       role: 'SALES_PERSON',
