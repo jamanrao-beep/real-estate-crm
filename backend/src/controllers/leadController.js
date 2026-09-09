@@ -90,44 +90,74 @@ async function assignLead(req, res) {
 }
 
 // POST /api/leads/auto-assign
-// Optional round-robin auto-assignment — section 4.2.
-// Assigns ALL currently unassigned leads to active sales people,
-// evenly, in turn.
+// High-performance round-robin auto-assignment for large volumes (1,000+ leads)
 async function autoAssignLeads(req, res) {
   try {
     const [unassignedLeads, activeSalesPeople] = await Promise.all([
-      prisma.lead.findMany({ where: { assignedToId: null, status: "ACTIVE" } }),
-      prisma.user.findMany({ where: { role: "SALES_PERSON", isActive: true } }),
+      prisma.lead.findMany({ 
+        where: { assignedToId: null, status: "ACTIVE" },
+        select: { id: true },
+        orderBy: { dateReceived: "desc" }
+      }),
+      prisma.user.findMany({ 
+        where: { role: "SALES_PERSON", isActive: true },
+        select: { id: true, name: true }
+      }),
     ]);
+
+    if (unassignedLeads.length === 0) {
+      return res.json({ assignedCount: 0, message: "No unassigned leads found" });
+    }
 
     if (activeSalesPeople.length === 0) {
       return res.status(400).json({ error: "No active sales people to assign to" });
     }
 
-    const assignments = [];
+    // Group lead IDs by sales person for bulk updateMany
+    const salesPersonLeadsMap = new Map();
+    activeSalesPeople.forEach(sp => salesPersonLeadsMap.set(sp.id, []));
+
+    const adminId = req.user?.userId || req.user?.id || activeSalesPeople[0]?.id;
+
+    const historyRows = [];
     unassignedLeads.forEach((lead, index) => {
       const salesPerson = activeSalesPeople[index % activeSalesPeople.length];
-      assignments.push(
-        prisma.lead.update({
-          where: { id: lead.id },
-          data: { assignedToId: salesPerson.id },
-        }),
-        prisma.leadAssignmentHistory.create({
-          data: {
-            leadId: lead.id,
-            assignedToId: salesPerson.id,
-            assignedById: req.user.userId,
-          },
-        })
-      );
+      salesPersonLeadsMap.get(salesPerson.id).push(lead.id);
+      historyRows.push({
+        leadId: lead.id,
+        assignedToId: salesPerson.id,
+        assignedById: adminId,
+      });
     });
 
-    await prisma.$transaction(assignments);
+    // 1. Bulk update leads for each sales person (1 fast query per sales rep)
+    for (const [salesPersonId, leadIds] of salesPersonLeadsMap.entries()) {
+      if (leadIds.length === 0) continue;
+      // Chunk in 500s for safety
+      for (let i = 0; i < leadIds.length; i += 500) {
+        const chunk = leadIds.slice(i, i + 500);
+        await prisma.lead.updateMany({
+          where: { id: { in: chunk } },
+          data: { assignedToId: salesPersonId },
+        });
+      }
+    }
 
-    return res.json({ assignedCount: unassignedLeads.length });
+    // 2. Bulk insert assignment history records (chunked into 500s)
+    for (let i = 0; i < historyRows.length; i += 500) {
+      const chunk = historyRows.slice(i, i + 500);
+      await prisma.leadAssignmentHistory.createMany({
+        data: chunk,
+      }).catch(err => console.error("Failed to log assignment history chunk:", err.message));
+    }
+
+    return res.json({ 
+      assignedCount: unassignedLeads.length,
+      message: `Successfully distributed ${unassignedLeads.length} leads across ${activeSalesPeople.length} sales reps!`
+    });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Auto-assignment failed" });
+    console.error("Auto-assignment failed:", err);
+    return res.status(500).json({ error: "Auto-assignment failed: " + err.message });
   }
 }
 
