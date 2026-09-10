@@ -297,6 +297,8 @@ async function updateFunnelStage(req, res) {
     if (lead.funnelStage === stage) {
       return res.json(lead);
     }
+
+    const [updatedLead] = await prisma.$transaction([
       prisma.lead.update({
         where: { id },
         data: { funnelStage: stage },
