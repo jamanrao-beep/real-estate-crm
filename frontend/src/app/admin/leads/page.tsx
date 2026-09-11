@@ -244,8 +244,10 @@ export default function AllLeadsPage() {
           >
             <option value="">Any Stage</option>
             <option value="INTERESTED">Interested</option>
+            <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
             <option value="SITE_VISIT_DONE">Site Visit Done</option>
             <option value="DEAL_CLOSED">Deal Closed</option>
+            <option value="NOT_INTERESTED">Not Interested</option>
             <option value="LOST">Lost</option>
           </Select>
         </div>

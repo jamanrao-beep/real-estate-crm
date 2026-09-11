@@ -26,8 +26,10 @@ enum LeadCategory {
 
 enum FunnelStage {
   INTERESTED
+  OFFICE_VISIT_DONE
   SITE_VISIT_DONE
   DEAL_CLOSED
+  NOT_INTERESTED
   LOST
 }
 

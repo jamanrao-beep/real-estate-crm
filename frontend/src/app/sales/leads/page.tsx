@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock, Calendar } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw } from "lucide-react";
 
 interface Lead {
   id: string;
@@ -49,6 +49,131 @@ export default function MyLeadsPage() {
   const [callEnd, setCallEnd] = useState("");
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
+
+  // Filters State
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const resetFilters = () => {
+    setCategoryFilter("");
+    setStageFilter("");
+    setSearchQuery("");
+  };
+
+  const hasActiveFilters = Boolean(categoryFilter || stageFilter || searchQuery.trim());
+
+  // Dynamic filter logic
+  const filteredLeads = leads.filter((lead) => {
+    if (categoryFilter && lead.category !== categoryFilter) {
+      return false;
+    }
+    if (stageFilter && lead.funnelStage !== stageFilter) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = lead.name?.toLowerCase().includes(q);
+      const phoneMatch = lead.phone?.toLowerCase().includes(q);
+      const emailMatch = lead.email?.toLowerCase().includes(q);
+      if (!nameMatch && !phoneMatch && !emailMatch) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Dynamic counts for all 8 filters
+  const categoryCounts = {
+    HOT: leads.filter((l) => l.category === "HOT").length,
+    WARM: leads.filter((l) => l.category === "WARM").length,
+    COLD: leads.filter((l) => l.category === "COLD").length,
+  };
+
+  const stageCounts = {
+    INTERESTED: leads.filter((l) => l.funnelStage === "INTERESTED").length,
+    OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
+    SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
+    DEAL_CLOSED: leads.filter((l) => l.funnelStage === "DEAL_CLOSED").length,
+    NOT_INTERESTED: leads.filter((l) => l.funnelStage === "NOT_INTERESTED").length,
+  };
+
+  // CSV Export
+  const exportToCSV = () => {
+    const leadsToExport = filteredLeads;
+    if (leadsToExport.length === 0) {
+      alert("No leads found matching current criteria to export.");
+      return;
+    }
+
+    const headers = [
+      "Name",
+      "Phone",
+      "Email",
+      "Category",
+      "Funnel Stage",
+      "Status",
+      "Follow-Up Reminder",
+      "Follow-Up Notes",
+      "Date Received",
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const formatStageLabel = (stage: string | null) => {
+      if (!stage) return "";
+      switch (stage) {
+        case "INTERESTED": return "Interested";
+        case "OFFICE_VISIT_DONE": return "Office Visit Done";
+        case "SITE_VISIT_DONE": return "Site Visit Done";
+        case "DEAL_CLOSED": return "Deal Closed";
+        case "NOT_INTERESTED": return "Not Interested";
+        case "LOST": return "Lost";
+        default: return stage;
+      }
+    };
+
+    const formatCategoryLabel = (cat: string | null) => {
+      if (!cat) return "";
+      switch (cat) {
+        case "HOT": return "Hot";
+        case "WARM": return "Warm";
+        case "COLD": return "Cold";
+        default: return cat;
+      }
+    };
+
+    const rows = leadsToExport.map((lead) => [
+      escapeCSV(lead.name),
+      escapeCSV(lead.phone),
+      escapeCSV(lead.email || ""),
+      escapeCSV(formatCategoryLabel(lead.category)),
+      escapeCSV(formatStageLabel(lead.funnelStage)),
+      escapeCSV(lead.status),
+      escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
+      escapeCSV(lead.followUpNotes || ""),
+      escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN") : ""),
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    const filterSuffix = hasActiveFilters ? "_filtered" : "_all";
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    link.href = url;
+    link.setAttribute("download", `my_leads${filterSuffix}_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -157,13 +282,227 @@ export default function MyLeadsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header with Title and Export Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">My Leads Workspace</h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
             Manage your assigned leads, update progress, and log interactions.
           </p>
         </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToCSV}
+            className="flex items-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 font-medium"
+            title={hasActiveFilters ? "Export filtered leads as CSV" : "Export all assigned leads as CSV"}
+          >
+            <Download size={15} />
+            <span>Export CSV {hasActiveFilters ? `(${filteredLeads.length})` : `(${leads.length})`}</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters Toolbar */}
+      <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm space-y-3">
+        {/* Dropdown & Search Controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          {/* Search Input */}
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Search Leads
+            </label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+              <Input
+                placeholder="Search name, phone, email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-10 text-xs sm:text-sm bg-bg"
+              />
+            </div>
+          </div>
+
+          {/* Category Dropdown */}
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Category
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="">Any Category ({leads.length})</option>
+              <option value="HOT">Hot 🔥 ({categoryCounts.HOT})</option>
+              <option value="WARM">Warm 🌤️ ({categoryCounts.WARM})</option>
+              <option value="COLD">Cold ❄️ ({categoryCounts.COLD})</option>
+            </Select>
+          </div>
+
+          {/* Funnel Stage Dropdown */}
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Funnel Stage
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+            >
+              <option value="">Any Funnel Stage ({leads.length})</option>
+              <option value="INTERESTED">Interested ({stageCounts.INTERESTED})</option>
+              <option value="OFFICE_VISIT_DONE">Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})</option>
+              <option value="SITE_VISIT_DONE">Site Visit Done ({stageCounts.SITE_VISIT_DONE})</option>
+              <option value="DEAL_CLOSED">Deal Closed ({stageCounts.DEAL_CLOSED})</option>
+              <option value="NOT_INTERESTED">Not Interested ({stageCounts.NOT_INTERESTED})</option>
+            </Select>
+          </div>
+
+          {/* Reset Filters */}
+          <div>
+            <Button
+              variant="outline"
+              className="w-full h-10 text-xs sm:text-sm justify-center gap-1.5"
+              onClick={resetFilters}
+              disabled={!hasActiveFilters}
+            >
+              <RotateCcw size={14} />
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+
+        {/* Quick Filter Chips (The 8 requested filters: Hot, Warm, Cold + 5 Funnel Stages) */}
+        <div className="pt-2 border-t border-border/60 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mr-1 flex items-center gap-1">
+            <Filter size={12} /> Quick Filters:
+          </span>
+
+          {/* All chip */}
+          <button
+            type="button"
+            onClick={resetFilters}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              !hasActiveFilters
+                ? "bg-ink text-surface shadow-xs"
+                : "bg-bg text-ink-soft hover:text-ink hover:bg-border/60"
+            }`}
+          >
+            All ({leads.length})
+          </button>
+
+          {/* Category Chips */}
+          <span className="text-border mx-1">|</span>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(categoryFilter === "HOT" ? "" : "HOT")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+              categoryFilter === "HOT"
+                ? "bg-danger text-white shadow-xs"
+                : "bg-danger/10 text-danger hover:bg-danger/20"
+            }`}
+          >
+            Hot 🔥 ({categoryCounts.HOT})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(categoryFilter === "WARM" ? "" : "WARM")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+              categoryFilter === "WARM"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+            }`}
+          >
+            Warm 🌤️ ({categoryCounts.WARM})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(categoryFilter === "COLD" ? "" : "COLD")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+              categoryFilter === "COLD"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20"
+            }`}
+          >
+            Cold ❄️ ({categoryCounts.COLD})
+          </button>
+
+          {/* Funnel Stage Chips */}
+          <span className="text-border mx-1">|</span>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "INTERESTED" ? "" : "INTERESTED")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "INTERESTED"
+                ? "bg-accent text-white shadow-xs"
+                : "bg-accent/10 text-accent hover:bg-accent/20"
+            }`}
+          >
+            Interested ({stageCounts.INTERESTED})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "OFFICE_VISIT_DONE" ? "" : "OFFICE_VISIT_DONE")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "OFFICE_VISIT_DONE"
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20"
+            }`}
+          >
+            Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "SITE_VISIT_DONE" ? "" : "SITE_VISIT_DONE")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "SITE_VISIT_DONE"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+            }`}
+          >
+            Site Visit Done ({stageCounts.SITE_VISIT_DONE})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "DEAL_CLOSED" ? "" : "DEAL_CLOSED")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "DEAL_CLOSED"
+                ? "bg-emerald-700 text-white shadow-xs"
+                : "bg-emerald-600/10 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/20"
+            }`}
+          >
+            Deal Closed ({stageCounts.DEAL_CLOSED})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "NOT_INTERESTED" ? "" : "NOT_INTERESTED")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "NOT_INTERESTED"
+                ? "bg-zinc-600 text-white shadow-xs"
+                : "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-500/20"
+            }`}
+          >
+            Not Interested ({stageCounts.NOT_INTERESTED})
+          </button>
+        </div>
+
+        {/* Live Filter Summary Bar */}
+        {hasActiveFilters && (
+          <div className="flex items-center justify-between text-xs text-ink-soft pt-1">
+            <span>
+              Showing <strong className="text-ink">{filteredLeads.length}</strong> of <strong className="text-ink">{leads.length}</strong> leads
+            </span>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs text-accent hover:underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* DESKTOP TABLE VIEW (hidden on mobile, visible md and up) */}
@@ -199,8 +538,21 @@ export default function MyLeadsPage() {
                     <Search size={16} /> No leads assigned to you right now.
                   </td>
                 </tr>
+              ) : filteredLeads.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-ink-soft">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Search size={20} className="text-ink-soft/60" />
+                      <p className="font-medium text-ink">No leads match your selected filters</p>
+                      <p className="text-xs text-ink-soft">Try selecting a different filter or clearing search.</p>
+                      <Button variant="outline" size="sm" onClick={resetFilters} className="mt-2 text-xs">
+                        <RotateCcw size={13} className="mr-1.5" /> Clear Filters
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                leads.map((lead) => (
+                filteredLeads.map((lead) => (
                   <tr key={lead.id} className={`transition-colors ${lead.status === 'LOST' ? 'bg-bg/50 opacity-70' : 'hover:bg-surface/50'}`}>
                     <td className="p-4 align-top w-1/3">
                       <div className="font-medium text-ink flex items-center gap-2">
@@ -267,8 +619,10 @@ export default function MyLeadsPage() {
                       >
                         <option value="" disabled>Set Stage</option>
                         <option value="INTERESTED">Interested</option>
+                        <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
                         <option value="SITE_VISIT_DONE">Site Visit Done</option>
                         <option value="DEAL_CLOSED">Deal Closed</option>
+                        <option value="NOT_INTERESTED">Not Interested</option>
                       </Select>
                     </td>
                     <td className="p-4 align-top text-right">
@@ -314,8 +668,17 @@ export default function MyLeadsPage() {
             <p className="font-medium text-ink">No leads assigned</p>
             <p className="text-xs">No active leads assigned to you right now.</p>
           </div>
+        ) : filteredLeads.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft flex flex-col items-center justify-center gap-2">
+            <Search size={20} className="text-border" />
+            <p className="font-medium text-ink">No leads match filters</p>
+            <p className="text-xs">Try selecting a different filter or clearing search.</p>
+            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-1 text-xs">
+              <RotateCcw size={13} className="mr-1.5" /> Reset Filters
+            </Button>
+          </div>
         ) : (
-          leads.map((lead) => {
+          filteredLeads.map((lead) => {
             return (
               <div
                 key={lead.id}
@@ -407,8 +770,10 @@ export default function MyLeadsPage() {
                     >
                       <option value="" disabled>Stage</option>
                       <option value="INTERESTED">Interested</option>
+                      <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
                       <option value="SITE_VISIT_DONE">Site Visit Done</option>
                       <option value="DEAL_CLOSED">Deal Closed</option>
+                      <option value="NOT_INTERESTED">Not Interested</option>
                     </Select>
                   </div>
                 </div>

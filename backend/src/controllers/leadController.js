@@ -39,8 +39,14 @@ async function getAllLeads(req, res) {
 // GET /api/leads/mine  (sales person: only their own leads — section 5.1)
 async function getMyLeads(req, res) {
   try {
+    const { category, funnelStage } = req.query;
     const leads = await prisma.lead.findMany({
-      where: { assignedToId: req.user.userId, status: "ACTIVE" },
+      where: {
+        assignedToId: req.user.userId,
+        status: "ACTIVE",
+        ...(category && { category }),
+        ...(funnelStage && { funnelStage }),
+      },
       orderBy: { dateReceived: "desc" },
     });
     return res.json(leads);
@@ -277,8 +283,8 @@ async function updateFunnelStage(req, res) {
     const { id } = req.params;
     const { stage } = req.body;
 
-    if (!["INTERESTED", "SITE_VISIT_DONE", "DEAL_CLOSED"].includes(stage)) {
-      return res.status(400).json({ error: "stage must be INTERESTED, SITE_VISIT_DONE, or DEAL_CLOSED" });
+    if (!["INTERESTED", "OFFICE_VISIT_DONE", "SITE_VISIT_DONE", "DEAL_CLOSED", "NOT_INTERESTED"].includes(stage)) {
+      return res.status(400).json({ error: "stage must be INTERESTED, OFFICE_VISIT_DONE, SITE_VISIT_DONE, DEAL_CLOSED, or NOT_INTERESTED" });
     }
 
     const lead = await prisma.lead.findUnique({ where: { id } });
