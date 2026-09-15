@@ -5,9 +5,10 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus, Download } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
+import { SourceBadge } from "@/components/SourceBadge";
 
 interface Lead {
   id: string;
@@ -15,6 +16,7 @@ interface Lead {
   phone: string;
   email: string;
   source?: string;
+  formAnswers?: any;
   category: string | null;
   funnelStage: string | null;
   status: string;
@@ -129,6 +131,67 @@ export default function AllLeadsPage() {
     }
   };
 
+  const exportToCSV = () => {
+    if (leads.length === 0) {
+      alert("No leads found to export.");
+      return;
+    }
+
+    const headers = [
+      "Name",
+      "Phone",
+      "Email",
+      "Source",
+      "Occupation",
+      "Location",
+      "Budget",
+      "Notes",
+      "Category",
+      "Funnel Stage",
+      "Status",
+      "Assigned To",
+      "Follow-Up Reminder",
+      "Follow-Up Notes",
+      "Date Received",
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = leads.map((lead) => [
+      escapeCSV(lead.name),
+      escapeCSV(lead.phone),
+      escapeCSV(lead.email || ""),
+      escapeCSV(lead.source || "Direct"),
+      escapeCSV(lead.formAnswers?.occupation || ""),
+      escapeCSV(lead.formAnswers?.location || ""),
+      escapeCSV(lead.formAnswers?.budget || ""),
+      escapeCSV(lead.formAnswers?.notes || ""),
+      escapeCSV(lead.category || ""),
+      escapeCSV(lead.funnelStage || ""),
+      escapeCSV(lead.status),
+      escapeCSV(lead.assignedTo?.name || "Unassigned"),
+      escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
+      escapeCSV(lead.followUpNotes || ""),
+      escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN") : ""),
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.setAttribute("download", `all_leads_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     fetchSalesTeam();
   }, []);
@@ -178,6 +241,16 @@ export default function AllLeadsPage() {
           >
             <FileSpreadsheet size={14} className={isSyncingSheet ? "animate-spin" : ""} />
             {isSyncingSheet ? "Syncing..." : "Sync Sheet"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToCSV}
+            className="flex items-center justify-center gap-1.5 h-9 sm:h-10 text-xs sm:text-sm border border-border text-ink hover:bg-surface font-medium"
+            title="Export all leads as CSV / Excel"
+          >
+            <Download size={14} />
+            Export CSV
           </Button>
         </div>
       </div>
@@ -277,6 +350,9 @@ export default function AllLeadsPage() {
                   Contact
                 </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
+                  Source & Notes
+                </th>
+                <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
                   Assigned To
                 </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
@@ -293,13 +369,13 @@ export default function AllLeadsPage() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft">
                     Loading records...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
                     <Search size={16} /> No leads found matching criteria.
                   </td>
                 </tr>
@@ -312,6 +388,27 @@ export default function AllLeadsPage() {
                         {lead.phone}
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
+
+                      {/* Lead Details: Occupation, Location, Budget */}
+                      {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 text-[11px]">
+                          {lead.formAnswers?.occupation && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Occupation">
+                              💼 {lead.formAnswers.occupation}
+                            </span>
+                          )}
+                          {lead.formAnswers?.location && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Location">
+                              📍 {lead.formAnswers.location}
+                            </span>
+                          )}
+                          {lead.formAnswers?.budget && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-500/20" title="Budget">
+                              💰 {lead.formAnswers.budget}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Follow-Up Reminder Pill */}
                       {lead.followUpAt && (
@@ -333,6 +430,16 @@ export default function AllLeadsPage() {
                               <span className="italic break-words">&ldquo;{lead.followUpNotes}&rdquo;</span>
                             </div>
                           )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-4 align-top">
+                      <div>
+                        <SourceBadge source={lead.source} />
+                      </div>
+                      {lead.formAnswers?.notes && (
+                        <div className="text-[11px] text-ink/80 italic mt-1 max-w-xs line-clamp-2" title={lead.formAnswers.notes}>
+                          &ldquo;{lead.formAnswers.notes}&rdquo;
                         </div>
                       )}
                     </td>
@@ -429,6 +536,40 @@ export default function AllLeadsPage() {
                     {new Date(lead.dateReceived).toLocaleDateString()}
                   </span>
                 </div>
+              </div>
+
+              {/* Source & Notes */}
+              <div className="flex flex-col gap-1 pt-1 border-t border-border/40">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-semibold text-ink-soft tracking-wider">Source:</span>
+                  <SourceBadge source={lead.source} />
+                </div>
+                {lead.formAnswers?.notes && (
+                  <div className="text-xs text-ink/80 italic line-clamp-2 bg-bg/60 px-2.5 py-1.5 rounded-lg border border-border/50 mt-0.5">
+                    &ldquo;{lead.formAnswers.notes}&rdquo;
+                  </div>
+                )}
+
+                {/* Lead Details: Occupation, Location, Budget */}
+                {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (
+                  <div className="flex flex-wrap gap-1 mt-1 text-[11px]">
+                    {lead.formAnswers?.occupation && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Occupation">
+                        💼 {lead.formAnswers.occupation}
+                      </span>
+                    )}
+                    {lead.formAnswers?.location && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Location">
+                        📍 {lead.formAnswers.location}
+                      </span>
+                    )}
+                    {lead.formAnswers?.budget && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-500/20" title="Budget">
+                        💰 {lead.formAnswers.budget}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Assignment & Badges */}
