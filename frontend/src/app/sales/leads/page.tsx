@@ -7,12 +7,19 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw } from "lucide-react";
+import { SourceBadge } from "@/components/SourceBadge";
 
 interface Lead {
   id: string;
   name: string;
   phone: string;
   email: string;
+  source?: string;
+  sourceForm?: string;
+  formAnswers?: {
+    notes?: string;
+    [key: string]: any;
+  } | any;
   category: string | null;
   funnelStage: string | null;
   status: string;
@@ -45,23 +52,26 @@ export default function MyLeadsPage() {
   // Call Log Modal State
   const [activeCallLead, setActiveCallLead] = useState<Lead | null>(null);
   const [callNotes, setCallNotes] = useState("");
-  const [callStart, setCallStart] = useState("");
-  const [callEnd, setCallEnd] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [location, setLocation] = useState("");
+  const [budget, setBudget] = useState("");
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
 
   // Filters State
   const [categoryFilter, setCategoryFilter] = useState("");
   const [stageFilter, setStageFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
   const resetFilters = () => {
     setCategoryFilter("");
     setStageFilter("");
+    setSourceFilter("ALL");
     setSearchQuery("");
   };
 
-  const hasActiveFilters = Boolean(categoryFilter || stageFilter || searchQuery.trim());
+  const hasActiveFilters = Boolean(categoryFilter || stageFilter || (sourceFilter && sourceFilter !== "ALL") || searchQuery.trim());
 
   // Dynamic filter logic
   const filteredLeads = leads.filter((lead) => {
@@ -71,12 +81,28 @@ export default function MyLeadsPage() {
     if (stageFilter && lead.funnelStage !== stageFilter) {
       return false;
     }
+    if (sourceFilter && sourceFilter !== "ALL") {
+      const leadSource = (lead.source || lead.sourceForm || "").toLowerCase();
+      if (sourceFilter === "FB") {
+        if (!leadSource.includes("facebook") && !leadSource.includes("meta")) return false;
+      } else if (sourceFilter === "SHEET") {
+        if (!leadSource.includes("sheet") && !leadSource.includes("google")) return false;
+      } else if (sourceFilter === "EXCEL") {
+        if (!leadSource.includes("excel") && !leadSource.includes("csv")) return false;
+      } else if (sourceFilter === "WHATSAPP") {
+        if (!leadSource.includes("whatsapp") && !leadSource.includes("chatmitra")) return false;
+      } else if (sourceFilter === "MANUAL") {
+        if (!leadSource.includes("manual") && !leadSource.includes("entry") && !leadSource.includes("test") && !leadSource.includes("direct")) return false;
+      }
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const nameMatch = lead.name?.toLowerCase().includes(q);
       const phoneMatch = lead.phone?.toLowerCase().includes(q);
       const emailMatch = lead.email?.toLowerCase().includes(q);
-      if (!nameMatch && !phoneMatch && !emailMatch) {
+      const sourceMatch = (lead.source || lead.sourceForm || "").toLowerCase().includes(q);
+      const notesMatch = typeof lead.formAnswers?.notes === "string" && lead.formAnswers.notes.toLowerCase().includes(q);
+      if (!nameMatch && !phoneMatch && !emailMatch && !sourceMatch && !notesMatch) {
         return false;
       }
     }
@@ -110,6 +136,11 @@ export default function MyLeadsPage() {
       "Name",
       "Phone",
       "Email",
+      "Source",
+      "Occupation",
+      "Location",
+      "Budget",
+      "Notes",
       "Category",
       "Funnel Stage",
       "Status",
@@ -151,6 +182,11 @@ export default function MyLeadsPage() {
       escapeCSV(lead.name),
       escapeCSV(lead.phone),
       escapeCSV(lead.email || ""),
+      escapeCSV(lead.source || lead.sourceForm || "Direct"),
+      escapeCSV(lead.formAnswers?.occupation || ""),
+      escapeCSV(lead.formAnswers?.location || ""),
+      escapeCSV(lead.formAnswers?.budget || ""),
+      escapeCSV(lead.formAnswers?.notes || ""),
       escapeCSV(formatCategoryLabel(lead.category)),
       escapeCSV(formatStageLabel(lead.funnelStage)),
       escapeCSV(lead.status),
@@ -224,35 +260,43 @@ export default function MyLeadsPage() {
 
   const handleLogCall = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCallLead || !callStart || !callEnd) return;
+    if (!activeCallLead) return;
 
     try {
       await api.post("/calls", {
         leadId: activeCallLead.id,
-        startTime: new Date(callStart).toISOString(),
-        endTime: new Date(callEnd).toISOString(),
         notes: callNotes,
+        occupation: occupation.trim(),
+        location: location.trim(),
+        budget: budget.trim(),
         followUpAt: followUpAt ? new Date(followUpAt).toISOString() : null,
         followUpNotes: followUpNotes || null,
       });
 
-      // Update lead in local state so the table reflects the new reminder immediately
+      // Update lead in local state so table and cards reflect details immediately
       setLeads(prev => prev.map(l => l.id === activeCallLead.id ? {
         ...l,
+        formAnswers: {
+          ...(typeof l.formAnswers === "object" ? l.formAnswers : {}),
+          occupation: occupation.trim(),
+          location: location.trim(),
+          budget: budget.trim(),
+        },
         followUpAt: followUpAt ? new Date(followUpAt).toISOString() : l.followUpAt,
         followUpNotes: followUpAt ? (followUpNotes || null) : l.followUpNotes,
       } : l));
 
-      alert("Call logged successfully!");
+      alert("Interaction & lead details saved successfully!");
       setActiveCallLead(null);
-      setCallStart("");
-      setCallEnd("");
       setCallNotes("");
+      setOccupation("");
+      setLocation("");
+      setBudget("");
       setFollowUpAt("");
       setFollowUpNotes("");
     } catch (err: any) {
       console.error("Failed to log call", err);
-      alert(err.response?.data?.error || "Failed to log call");
+      alert(err.response?.data?.error || "Failed to log interaction");
     }
   };
 
@@ -267,14 +311,10 @@ export default function MyLeadsPage() {
   };
 
   const openCallModal = (lead: Lead) => {
-    const now = new Date();
-    // Default to 15 mins ago to now to save clicks
-    const end = now.toISOString().slice(0, 16);
-    const start = new Date(now.getTime() - 15 * 60000).toISOString().slice(0, 16);
-    
-    setCallStart(start);
-    setCallEnd(end);
     setCallNotes("");
+    setOccupation(lead.formAnswers?.occupation || "");
+    setLocation(lead.formAnswers?.location || "");
+    setBudget(lead.formAnswers?.budget || "");
     setFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
     setFollowUpNotes(lead.followUpNotes || "");
     setActiveCallLead(lead);
@@ -307,7 +347,7 @@ export default function MyLeadsPage() {
       {/* Filters Toolbar */}
       <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm space-y-3">
         {/* Dropdown & Search Controls */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
           {/* Search Input */}
           <div>
             <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
@@ -316,12 +356,31 @@ export default function MyLeadsPage() {
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
               <Input
-                placeholder="Search name, phone, email..."
+                placeholder="Search name, phone, email, source, notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 h-10 text-xs sm:text-sm bg-bg"
               />
             </div>
+          </div>
+
+          {/* Source Dropdown */}
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Source
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+            >
+              <option value="ALL">All Sources ({leads.length})</option>
+              <option value="EXCEL">Excel Bulk Imports</option>
+              <option value="FB">Meta / FB Leads</option>
+              <option value="SHEET">Google Sheets</option>
+              <option value="WHATSAPP">WhatsApp Bot</option>
+              <option value="MANUAL">Direct / Manual</option>
+            </Select>
           </div>
 
           {/* Category Dropdown */}
@@ -515,6 +574,9 @@ export default function MyLeadsPage() {
                   Contact
                 </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
+                  Source & Notes
+                </th>
+                <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
                   Category
                 </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
@@ -528,19 +590,19 @@ export default function MyLeadsPage() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-ink-soft">
+                  <td colSpan={5} className="p-8 text-center text-ink-soft">
                     Loading your leads...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+                  <td colSpan={5} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
                     <Search size={16} /> No leads assigned to you right now.
                   </td>
                 </tr>
               ) : filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-ink-soft">
+                  <td colSpan={5} className="p-8 text-center text-ink-soft">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search size={20} className="text-ink-soft/60" />
                       <p className="font-medium text-ink">No leads match your selected filters</p>
@@ -554,7 +616,7 @@ export default function MyLeadsPage() {
               ) : (
                 filteredLeads.map((lead) => (
                   <tr key={lead.id} className={`transition-colors ${lead.status === 'LOST' ? 'bg-bg/50 opacity-70' : 'hover:bg-surface/50'}`}>
-                    <td className="p-4 align-top w-1/3">
+                    <td className="p-4 align-top w-1/4">
                       <div className="font-medium text-ink flex items-center gap-2">
                         {lead.name}
                         {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
@@ -563,6 +625,27 @@ export default function MyLeadsPage() {
                         {lead.phone}
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
+
+                      {/* Lead Details: Occupation, Location, Budget */}
+                      {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 text-[11px]">
+                          {lead.formAnswers?.occupation && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Occupation">
+                              💼 {lead.formAnswers.occupation}
+                            </span>
+                          )}
+                          {lead.formAnswers?.location && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Location">
+                              📍 {lead.formAnswers.location}
+                            </span>
+                          )}
+                          {lead.formAnswers?.budget && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-500/20" title="Budget">
+                              💰 {lead.formAnswers.budget}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Follow-Up Reminder Pill */}
                       {lead.followUpAt && (
@@ -598,6 +681,16 @@ export default function MyLeadsPage() {
                       )}
                     </td>
                     <td className="p-4 align-top w-1/5">
+                      <div>
+                        <SourceBadge source={lead.source || lead.sourceForm} />
+                      </div>
+                      {lead.formAnswers?.notes && (
+                        <div className="text-[11px] text-ink/80 italic mt-1.5 max-w-xs line-clamp-2" title={lead.formAnswers.notes}>
+                          &ldquo;{lead.formAnswers.notes}&rdquo;
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-4 align-top w-1/6">
                       <Select
                         className="w-full"
                         value={lead.category || ""}
@@ -610,7 +703,7 @@ export default function MyLeadsPage() {
                         <option value="COLD">Cold</option>
                       </Select>
                     </td>
-                    <td className="p-4 align-top w-1/4">
+                    <td className="p-4 align-top w-1/5">
                       <Select
                         className="w-full"
                         value={lead.funnelStage || ""}
@@ -708,6 +801,40 @@ export default function MyLeadsPage() {
                       </a>
                     )}
                   </div>
+                </div>
+
+                {/* Source & Notes */}
+                <div className="flex flex-col gap-1 pt-1 border-t border-border/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-semibold text-ink-soft tracking-wider">Source:</span>
+                    <SourceBadge source={lead.source || lead.sourceForm} />
+                  </div>
+                  {lead.formAnswers?.notes && (
+                    <div className="text-xs text-ink/80 italic line-clamp-2 bg-bg/60 px-2.5 py-1.5 rounded-lg border border-border/50 mt-0.5">
+                      &ldquo;{lead.formAnswers.notes}&rdquo;
+                    </div>
+                  )}
+
+                  {/* Lead Details: Occupation, Location, Budget */}
+                  {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (
+                    <div className="flex flex-wrap gap-1 mt-1 text-[11px]">
+                      {lead.formAnswers?.occupation && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Occupation">
+                          💼 {lead.formAnswers.occupation}
+                        </span>
+                      )}
+                      {lead.formAnswers?.location && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-bg text-ink font-medium border border-border" title="Location">
+                          📍 {lead.formAnswers.location}
+                        </span>
+                      )}
+                      {lead.formAnswers?.budget && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-500/20" title="Budget">
+                          💰 {lead.formAnswers.budget}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Follow-up reminder box */}
@@ -812,29 +939,56 @@ export default function MyLeadsPage() {
         <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-lg font-serif text-ink font-bold">Log Call</h3>
-            <p className="text-xs sm:text-sm text-ink-soft mb-4">Record interaction with <strong className="text-ink">{activeCallLead.name}</strong></p>
+            <p className="text-xs sm:text-sm text-ink-soft mb-3">Record interaction with <strong className="text-ink">{activeCallLead.name}</strong></p>
             
+            {/* Lead Source & Notes Info Box */}
+            <div className="mb-4 p-2.5 rounded-lg bg-bg border border-border flex flex-col gap-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-ink-soft font-medium">Source:</span>
+                <SourceBadge source={activeCallLead.source || activeCallLead.sourceForm} />
+              </div>
+              {activeCallLead.formAnswers?.notes && (
+                <div className="mt-1 text-ink/80 text-[11px] italic border-t border-border/50 pt-1">
+                  <span className="font-semibold not-italic text-ink-soft">Notes: </span>
+                  &ldquo;{activeCallLead.formAnswers.notes}&rdquo;
+                </div>
+              )}
+            </div>
+
             <form onSubmit={handleLogCall} className="space-y-3 sm:space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 3 Bars: Occupation, Location, Budget */}
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">Start Time</label>
+                  <label className="block text-xs font-semibold text-ink-soft mb-1 uppercase tracking-wider">Occupation</label>
                   <Input 
-                    type="datetime-local" 
-                    required 
-                    value={callStart}
-                    onChange={(e) => setCallStart(e.target.value)}
-                    className="h-10 text-xs sm:text-sm"
+                    type="text" 
+                    value={occupation}
+                    onChange={(e) => setOccupation(e.target.value)}
+                    placeholder="e.g. Business Owner, Software Engineer, Doctor..."
+                    className="h-10 text-xs sm:text-sm bg-bg"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-soft mb-1 uppercase tracking-wider">End Time</label>
-                  <Input 
-                    type="datetime-local" 
-                    required 
-                    value={callEnd}
-                    onChange={(e) => setCallEnd(e.target.value)}
-                    className="h-10 text-xs sm:text-sm"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-soft mb-1 uppercase tracking-wider">Location</label>
+                    <Input 
+                      type="text" 
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="e.g. Dehradun, Delhi, Rajpur Road..."
+                      className="h-10 text-xs sm:text-sm bg-bg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-soft mb-1 uppercase tracking-wider">Budget</label>
+                    <Input 
+                      type="text" 
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      placeholder="e.g. 50 Lakhs, 1 Cr, 75L..."
+                      className="h-10 text-xs sm:text-sm bg-bg"
+                    />
+                  </div>
                 </div>
               </div>
               <div>

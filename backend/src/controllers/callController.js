@@ -6,10 +6,10 @@ const prisma = require("../prisma"); // Adjusted path
 // extend this later to accept a raw durationSecs directly.
 async function logCall(req, res) {
   try {
-    const { leadId, startTime, endTime, notes, followUpAt, followUpNotes } = req.body;
+    const { leadId, startTime, endTime, notes, followUpAt, followUpNotes, occupation, location, budget } = req.body;
 
-    if (!leadId || !startTime || !endTime) {
-      return res.status(400).json({ error: "leadId, startTime, and endTime are required" });
+    if (!leadId) {
+      return res.status(400).json({ error: "leadId is required" });
     }
 
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -22,8 +22,8 @@ async function logCall(req, res) {
       return res.status(403).json({ error: "You can only log calls for leads assigned to you" });
     }
 
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    const start = startTime ? new Date(startTime) : new Date();
+    const end = endTime ? new Date(endTime) : new Date();
     const durationSecs = Math.max(0, Math.round((end - start) / 1000));
 
     const followUpDate = followUpAt ? new Date(followUpAt) : null;
@@ -36,22 +36,28 @@ async function logCall(req, res) {
         startTime: start,
         endTime: end,
         durationSecs,
-        notes,
+        notes: notes || null,
         followUpAt: followUpDate,
         followUpNotes: cleanFollowUpNotes,
       },
     });
 
-    // If a followUp reminder was set, update the active reminder on the Lead
-    if (followUpDate) {
-      await prisma.lead.update({
-        where: { id: leadId },
-        data: {
+    // Update lead with occupation, location, budget, and followUp if set
+    const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
+    if (occupation !== undefined && occupation !== null) currentFormAnswers.occupation = occupation;
+    if (location !== undefined && location !== null) currentFormAnswers.location = location;
+    if (budget !== undefined && budget !== null) currentFormAnswers.budget = budget;
+
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        formAnswers: currentFormAnswers,
+        ...(followUpDate && {
           followUpAt: followUpDate,
           followUpNotes: cleanFollowUpNotes,
-        },
-      });
-    }
+        }),
+      },
+    });
 
     return res.status(201).json(callLog);
   } catch (err) {
