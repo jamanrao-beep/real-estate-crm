@@ -15,6 +15,7 @@ interface PerformanceResult {
   totalLeadsReceived: number;
   totalLeadsConverted: number;
   siteVisitsDone: number;
+  officeVisitsDone?: number;
   numberOfCalls: number;
   callHours: number;
   categoryBreakdown: { category: string; count: number }[];
@@ -208,15 +209,29 @@ export default function PerformanceDashboard() {
                       </div>
                     </td>
                     <td className="p-4 align-top text-right">
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex flex-col items-end gap-1.5">
                         <div className="flex items-center gap-2 text-ink">
                           <span className="text-sm text-ink-soft">Site Visits</span>
-                          <span className="font-mono font-medium">{r.siteVisitsDone}</span>
+                          <span className="font-mono font-medium">{r.siteVisitsDone || 0}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-ink">
-                          <span className="text-sm text-ink-soft">Calls</span>
-                          <span className="font-mono font-medium">{r.numberOfCalls}</span>
-                          <Phone size={14} className="text-ink-soft" />
+                        <div className="text-xs text-ink-soft">
+                          Site Visit Rate:{" "}
+                          {r.totalLeadsReceived
+                            ? Math.round(((r.siteVisitsDone || 0) / r.totalLeadsReceived) * 100)
+                            : 0}
+                          %
+                        </div>
+
+                        <div className="flex items-center gap-2 text-ink mt-1">
+                          <span className="text-sm text-ink-soft">Office Visits</span>
+                          <span className="font-mono font-medium">{r.officeVisitsDone || 0}</span>
+                        </div>
+                        <div className="text-xs text-ink-soft">
+                          Office Visit Rate:{" "}
+                          {r.totalLeadsReceived
+                            ? Math.round(((r.officeVisitsDone || 0) / r.totalLeadsReceived) * 100)
+                            : 0}
+                          %
                         </div>
                       </div>
                     </td>
@@ -279,8 +294,13 @@ export default function PerformanceDashboard() {
                     <span className="font-bold text-ink text-sm">{r.totalLeadsReceived} Rec / {r.totalLeadsConverted} Won</span>
                   </div>
                   <div className="bg-bg p-2.5 rounded-lg border border-border/60">
-                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Visits & Calls</span>
-                    <span className="font-bold text-ink text-sm">{r.siteVisitsDone} Visits / {r.numberOfCalls} Calls</span>
+                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Visits</span>
+                    <span className="font-bold text-ink text-sm">
+                      {r.siteVisitsDone || 0} Site ({r.totalLeadsReceived ? Math.round(((r.siteVisitsDone || 0) / r.totalLeadsReceived) * 100) : 0}%)
+                    </span>
+                    <span className="text-[11px] text-ink-soft block mt-0.5">
+                      {r.officeVisitsDone || 0} Office ({r.totalLeadsReceived ? Math.round(((r.officeVisitsDone || 0) / r.totalLeadsReceived) * 100) : 0}%)
+                    </span>
                   </div>
                   <div className="bg-bg p-2.5 rounded-lg border border-border/60">
                     <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Sales Value</span>

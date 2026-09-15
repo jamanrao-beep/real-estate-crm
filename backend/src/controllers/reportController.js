@@ -19,6 +19,7 @@ async function computePerformance(salesPersonId, start, end) {
     leadsAssignedCount,
     dealsClosedCount,
     siteVisitsCount,
+    officeVisitsCount,
     callAgg,
     categoryGroups,
     funnelGroups,
@@ -49,12 +50,41 @@ async function computePerformance(salesPersonId, start, end) {
     prisma.lead.count({
       where: {
         assignedToId: salesPersonId,
-        statusHistory: {
-          some: {
-            stage: "SITE_VISIT_DONE",
-            changedAt: { gte: start, lt: end },
+        OR: [
+          {
+            statusHistory: {
+              some: {
+                stage: "SITE_VISIT_DONE",
+                changedAt: { gte: start, lt: end },
+              },
+            },
           },
-        },
+          {
+            funnelStage: "SITE_VISIT_DONE",
+            updatedAt: { gte: start, lt: end },
+          },
+        ],
+      },
+    }),
+
+    // Number of distinct leads with office visits done in this period
+    prisma.lead.count({
+      where: {
+        assignedToId: salesPersonId,
+        OR: [
+          {
+            statusHistory: {
+              some: {
+                stage: "OFFICE_VISIT_DONE",
+                changedAt: { gte: start, lt: end },
+              },
+            },
+          },
+          {
+            funnelStage: "OFFICE_VISIT_DONE",
+            updatedAt: { gte: start, lt: end },
+          },
+        ],
       },
     }),
 
@@ -96,6 +126,7 @@ async function computePerformance(salesPersonId, start, end) {
     totalLeadsReceived: leadsAssignedCount,
     totalLeadsConverted: dealsClosedCount,
     siteVisitsDone: siteVisitsCount,
+    officeVisitsDone: officeVisitsCount,
     numberOfCalls: callAgg._count,
     callHours: Math.round(((callAgg._sum.durationSecs || 0) / 3600) * 100) / 100,
     categoryBreakdown: categoryGroups.map((g) => ({ category: g.category, count: g._count })),
@@ -246,6 +277,9 @@ async function exportPerformance(req, res) {
       Leads_Converted: r.totalLeadsConverted,
       Conversion_Rate: r.totalLeadsReceived ? Math.round((r.totalLeadsConverted / r.totalLeadsReceived) * 100) + '%' : '0%',
       Site_Visits: r.siteVisitsDone,
+      Site_Visit_Rate: r.totalLeadsReceived ? Math.round((r.siteVisitsDone / r.totalLeadsReceived) * 100) + '%' : '0%',
+      Office_Visits: r.officeVisitsDone,
+      Office_Visit_Rate: r.totalLeadsReceived ? Math.round((r.officeVisitsDone / r.totalLeadsReceived) * 100) + '%' : '0%',
       Number_Of_Calls: r.numberOfCalls,
       Call_Hours: r.callHours,
       Total_Sales_Value: r.totalSalesValueClosed,
@@ -259,6 +293,9 @@ async function exportPerformance(req, res) {
       { label: "Leads Converted", value: "Leads_Converted" },
       { label: "Conversion Rate", value: "Conversion_Rate" },
       { label: "Site Visits", value: "Site_Visits" },
+      { label: "Site Visit Rate", value: "Site_Visit_Rate" },
+      { label: "Office Visits", value: "Office_Visits" },
+      { label: "Office Visit Rate", value: "Office_Visit_Rate" },
       { label: "Number Of Calls", value: "Number_Of_Calls" },
       { label: "Call Hours", value: "Call_Hours" },
       { label: "Total Sales Value", value: "Total_Sales_Value" },
