@@ -44,6 +44,12 @@ async function main() {
       password: 'Bj@2026',
       role: 'SALES_PERSON',
     },
+    {
+      name: 'Kanishka',
+      email: 'kanishka@bkdcrm.com',
+      password: 'K@2026',
+      role: 'SALES_PERSON',
+    },
     // Broker
     {
       name: 'Channel Partner',

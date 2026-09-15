@@ -1,7 +1,28 @@
 const axios = require("axios");
 const prisma = require("../prisma");
 
-const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1N_JewBBH6aaWuFNKVlv1TznVaTpPnEm7PAAfNyrIOY4/export?format=csv&gid=0";
+const PROJECT_SHEETS = [
+  {
+    name: "Fun Valley",
+    sourceName: "Fun Valley",
+    url: process.env.GOOGLE_SHEET_FUN_VALLEY_URL || process.env.GOOGLE_SHEET_CSV_URL || "https://docs.google.com/spreadsheets/d/1N_JewBBH6aaWuFNKVlv1TznVaTpPnEm7PAAfNyrIOY4/export?format=csv&gid=0"
+  },
+  {
+    name: "Sahastradhara",
+    sourceName: "Sahastradhara",
+    url: process.env.GOOGLE_SHEET_SAHASTRADHARA_URL || "https://docs.google.com/spreadsheets/d/1jT2h7c-Ik5AMV3ycgIWVDtxIgDWW2MZSTkxOtjGrGoI/export?format=csv&gid=0"
+  },
+  {
+    name: "Rani Pokhari",
+    sourceName: "Rani Pokhari",
+    url: process.env.GOOGLE_SHEET_RANI_POKHARI_URL || "https://docs.google.com/spreadsheets/d/1JQsg_Jtdfdob9-UwrDaqjUKNRijzJL1OHSHXRqooBfU/export?format=csv&gid=0"
+  },
+  {
+    name: "Thano",
+    sourceName: "Thano",
+    url: process.env.GOOGLE_SHEET_THANO_URL || "https://docs.google.com/spreadsheets/d/1lLTAtmqpRjXcSoYAbf0n66rggTO_6zDSeo4GVUm5mlk/export?format=csv&gid=0"
+  }
+];
 
 // Simple robust CSV parser handling quotes, commas, and newlines
 function parseCSV(text) {
@@ -47,18 +68,16 @@ function parseCSV(text) {
   return lines;
 }
 
-async function syncGoogleSheetLeads() {
-  const sheetUrl = process.env.GOOGLE_SHEET_CSV_URL || DEFAULT_SHEET_URL;
-
+async function syncSingleSheet(project) {
   try {
-    const response = await axios.get(sheetUrl, {
+    const response = await axios.get(project.url, {
       timeout: 10000,
       headers: { "Accept": "text/csv" }
     });
 
     const rows = parseCSV(response.data);
     if (!rows || rows.length < 2) {
-      return { synced: 0, skipped: 0, total: 0, message: "No data rows in sheet" };
+      return { synced: 0, skipped: 0, total: 0, project: project.name };
     }
 
     const headers = rows[0].map(h => h.toLowerCase().trim());
@@ -90,14 +109,17 @@ async function syncGoogleSheetLeads() {
       let rawPhone = phoneIdx !== -1 ? row[phoneIdx] : "";
       let email = emailIdx !== -1 ? row[emailIdx] : "";
       let createdTime = createdTimeIdx !== -1 ? row[createdTimeIdx] : null;
-      let campaign = campaignIdx !== -1 ? row[campaignIdx] : "Meta Lead Form";
+      let campaign = campaignIdx !== -1 ? row[campaignIdx] : "";
 
       // Clean phone: strip 'p:', spaces, etc.
       let phone = rawPhone ? rawPhone.replace(/^p:/i, "").trim() : "";
+      if (phone.includes("dummy data")) {
+        phone = `${phone} (${project.name})`;
+      }
       
       // Fallback for name
       if (!name || name.includes("dummy data")) {
-        name = phone ? `Meta Lead (${phone})` : `Meta Lead #${i}`;
+        name = `${project.name} Test Lead`;
       }
 
       // If both name and phone are empty/useless, skip row
@@ -141,14 +163,16 @@ async function syncGoogleSheetLeads() {
         }
       }
 
-      // Create new lead in unassigned inbox
+      // Create new lead in unassigned inbox with project source
       const newLead = await prisma.lead.create({
         data: {
           name,
           phone: phone || "N/A",
           email: email || "",
-          source: campaign ? `Facebook Ads (${campaign})` : "Facebook Ads (Google Sheet)",
+          source: project.sourceName,
           formAnswers: {
+            project: project.name,
+            campaign: campaign || null,
             sheetRow: i + 1,
             raw: row,
             headers: headers
@@ -159,24 +183,57 @@ async function syncGoogleSheetLeads() {
       });
 
       synced++;
-      console.log(`[GoogleSheetSync] Imported new lead: ${name} (${phone})`);
+      console.log(`[GoogleSheetSync] [${project.name}] Imported new lead: ${name} (${phone})`);
 
       // Trigger automated WhatsApp greeting via ChatMitra Bot
-      const { sendChatMitraLeadGreeting } = require("./chatMitraService");
-      sendChatMitraLeadGreeting(newLead).catch(err =>
-        console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
-      );
+      try {
+        const { sendChatMitraLeadGreeting } = require("./chatMitraService");
+        sendChatMitraLeadGreeting(newLead).catch(err =>
+          console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
+        );
+      } catch (err) {
+        // ChatMitra optional
+      }
     }
 
     return {
+      project: project.name,
       synced,
       skipped,
       total: rows.length - 1
     };
   } catch (err) {
-    console.error("[GoogleSheetSync] Error syncing sheet:", err.message);
-    throw err;
+    console.warn(`[GoogleSheetSync] Could not sync ${project.name} (${project.url}): ${err.message}`);
+    return {
+      project: project.name,
+      synced: 0,
+      skipped: 0,
+      total: 0,
+      error: err.message
+    };
   }
 }
 
-module.exports = { syncGoogleSheetLeads };
+async function syncGoogleSheetLeads() {
+  let totalSynced = 0;
+  let totalSkipped = 0;
+  let totalRows = 0;
+  const projectResults = [];
+
+  for (const project of PROJECT_SHEETS) {
+    const result = await syncSingleSheet(project);
+    totalSynced += result.synced || 0;
+    totalSkipped += result.skipped || 0;
+    totalRows += result.total || 0;
+    projectResults.push(result);
+  }
+
+  return {
+    synced: totalSynced,
+    skipped: totalSkipped,
+    total: totalRows,
+    projects: projectResults
+  };
+}
+
+module.exports = { syncGoogleSheetLeads, PROJECT_SHEETS };
