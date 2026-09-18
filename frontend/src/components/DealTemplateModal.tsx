@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Printer, Image as ImageIcon } from "lucide-react";
 import api from "@/lib/api";
+import PlotSimulationCanvas, { PlotSimulationData } from "@/components/PlotSimulationCanvas";
 
 interface DealTemplateModalProps {
   deal: any;
@@ -12,7 +13,7 @@ interface DealTemplateModalProps {
 }
 
 export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplateModalProps) {
-  // Load existing details or fallback to empty strings
+  // Load existing details or fallback to empty strings / 0
   const [templateDetails, setTemplateDetails] = useState({
     loanStatus: deal.templateDetails?.loanStatus || "",
     ref: deal.templateDetails?.ref || "",
@@ -33,15 +34,19 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
     
     // Page 2 specific
     plotNo: deal.plotNumber || deal.templateDetails?.plotNo || "",
+    otherDetails: deal.templateDetails?.otherDetails || "",
+    demarcation: deal.templateDetails?.demarcation || "",
     clientName: deal.lead?.name || "",
-    whiteValueRate: deal.templateDetails?.whiteValueRate || "13650",
-    totalPlotValue: deal.templateDetails?.totalPlotValue || deal.dealAmount || "",
+    whiteValueRate: deal.templateDetails?.whiteValueRate || "",
+    totalPlotValue: deal.templateDetails?.totalPlotValue || (deal.dealAmount ? String(deal.dealAmount) : "") || "",
     
     advocateFee: deal.templateDetails?.advocateFee || "",
     govtReceipt: deal.templateDetails?.govtReceipt || "",
     stampDuty: deal.templateDetails?.stampDuty || "",
     societyCharges: deal.templateDetails?.societyCharges || "",
     demarcationFee: deal.templateDetails?.demarcationFee || "",
+    
+    plotSimulation: deal.templateDetails?.plotSimulation || null,
     
     payments: deal.templateDetails?.payments || [
       { date: "", utr: "", amount: "" },
@@ -101,12 +106,12 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
   const whiteValueTotal = sqMetersNum * whiteValueRateNum;
   
   const totalPlotValueNum = parseFloat(templateDetails.totalPlotValue) || 0;
-  const cashValue = totalPlotValueNum - whiteValueTotal;
+  const cashValue = totalPlotValueNum > 0 ? Math.max(0, totalPlotValueNum - whiteValueTotal) : 0;
 
   const advocateFeeNum = parseFloat(templateDetails.advocateFee) || 0;
   const govtReceiptNum = parseFloat(templateDetails.govtReceipt) || 0;
-  const stampDutyNum = parseFloat(templateDetails.stampDuty) || Math.round(whiteValueTotal * 0.05);
-  const societyChargesNum = parseFloat(templateDetails.societyCharges) || Math.round((parseFloat(templateDetails.sqYards) || 0) * 200);
+  const stampDutyNum = parseFloat(templateDetails.stampDuty) || 0;
+  const societyChargesNum = parseFloat(templateDetails.societyCharges) || 0;
   const demarcationFeeNum = parseFloat(templateDetails.demarcationFee) || 0;
   const totalCharges = advocateFeeNum + govtReceiptNum + stampDutyNum + societyChargesNum + demarcationFeeNum;
   const totalAmountToBePaid = totalPlotValueNum + totalCharges;
@@ -181,27 +186,19 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
               {/* Plot Details Box */}
               <div className="border border-black flex flex-col h-full">
                 <div className="bg-gray-100 border-b border-black p-1 text-center font-bold text-sm">Plot Details</div>
-                <div className="flex-1 p-4 flex flex-col justify-center items-center relative group min-h-[250px]">
-                  {plotImage ? (
-                    <>
-                      <img src={plotImage} alt="Plot Diagram" className="max-w-[80%] max-h-[80%] object-contain" />
-                      <label className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center cursor-pointer print:hidden text-white transition-opacity">
-                        <ImageIcon size={24} className="mr-2" /> Change Image
-                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                      </label>
-                    </>
-                  ) : (
-                    <label className="border-2 border-dashed border-gray-300 w-[80%] aspect-square flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 print:hidden text-gray-400">
-                      <ImageIcon size={32} className="mb-2" />
-                      <span className="text-sm">Upload Diagram</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                    </label>
-                  )}
+                <div className="flex-1 flex flex-col justify-center items-center relative min-h-[250px] overflow-hidden bg-white">
+                  <PlotSimulationCanvas
+                    initialData={templateDetails.plotSimulation}
+                    plotNo={templateDetails.plotNo}
+                    currentImage={plotImage}
+                    onImageChange={(dataUrl) => setPlotImage(dataUrl)}
+                    onDataChange={(simData) => setTemplateDetails(prev => ({ ...prev, plotSimulation: simData }))}
+                  />
                 </div>
                 <div className="p-2 border-t border-black text-sm flex flex-col gap-2">
                   <div className="flex"><span className="w-24 font-semibold">Plot No:</span> <input type="text" className="flex-1 border-b border-dotted border-gray-400 outline-none bg-transparent" value={templateDetails.plotNo} onChange={e => handleInputChange('plotNo', e.target.value)} /></div>
-                  <div className="flex"><span className="w-24 font-semibold">Other Details:</span> <input type="text" className="flex-1 border-b border-dotted border-gray-400 outline-none bg-transparent" /></div>
-                  <div className="flex"><span className="w-24 font-semibold">Demarcation:</span> <input type="text" className="flex-1 border-b border-dotted border-gray-400 outline-none bg-transparent" /></div>
+                  <div className="flex"><span className="w-24 font-semibold">Other Details:</span> <input type="text" className="flex-1 border-b border-dotted border-gray-400 outline-none bg-transparent" value={templateDetails.otherDetails} onChange={e => handleInputChange('otherDetails', e.target.value)} placeholder="e.g. Corner plot, 30ft Road" /></div>
+                  <div className="flex"><span className="w-24 font-semibold">Demarcation:</span> <input type="text" className="flex-1 border-b border-dotted border-gray-400 outline-none bg-transparent" value={templateDetails.demarcation} onChange={e => handleInputChange('demarcation', e.target.value)} placeholder="e.g. Pillars installed" /></div>
                 </div>
               </div>
 
@@ -299,16 +296,16 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
                 <div className="flex gap-2 mb-2">
                   <span className="font-semibold min-w-[200px]">White Value (As per Circle Rate):</span> 
                   <span>₹</span>
-                  <input type="number" className="border-b border-dotted border-gray-400 w-24 outline-none text-center bg-transparent" value={templateDetails.whiteValueRate} onChange={e => handleInputChange('whiteValueRate', e.target.value)} /> 
+                  <input type="number" className="border-b border-dotted border-gray-400 w-24 outline-none text-center bg-transparent" value={templateDetails.whiteValueRate} onChange={e => handleInputChange('whiteValueRate', e.target.value)} placeholder="0" /> 
                   <span className="mx-2">x</span>
                   <input type="text" className="border-b border-dotted border-gray-400 w-24 outline-none text-center bg-transparent" value={templateDetails.sqMeters} readOnly /> 
                   <span className="mx-2">Sq. meters =</span>
-                  <span className="font-bold border-b border-black min-w-[100px] inline-block text-right">₹ {whiteValueTotal.toLocaleString('en-IN', {maximumFractionDigits: 2})}</span>
+                  <span className="font-bold border-b border-black min-w-[100px] inline-block text-right">₹ {whiteValueTotal ? whiteValueTotal.toLocaleString('en-IN', {maximumFractionDigits: 2}) : "0"}</span>
                 </div>
 
                 <div className="flex gap-2 mb-4">
                   <span className="font-semibold min-w-[200px] pl-4">Total Plot Value:</span> 
-                  <span className="font-bold border-b border-black min-w-[150px] inline-block">₹ <input type="number" className="outline-none w-32 bg-transparent" value={templateDetails.totalPlotValue} onChange={e => handleInputChange('totalPlotValue', e.target.value)} /></span>
+                  <span className="font-bold border-b border-black min-w-[150px] inline-block">₹ <input type="number" className="outline-none w-32 bg-transparent" value={templateDetails.totalPlotValue} onChange={e => handleInputChange('totalPlotValue', e.target.value)} placeholder="0" /></span>
                 </div>
 
                 <div className="flex gap-2 mb-2">
@@ -316,7 +313,7 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
                 </div>
                 <div className="flex gap-2 pl-4">
                   <span>Total Plot Value - White Value =</span>
-                  <span className="font-bold border-b border-black min-w-[150px] inline-block text-right">₹ {cashValue.toLocaleString('en-IN', {maximumFractionDigits: 2})}</span>
+                  <span className="font-bold border-b border-black min-w-[150px] inline-block text-right">₹ {cashValue ? cashValue.toLocaleString('en-IN', {maximumFractionDigits: 2}) : "0"}</span>
                 </div>
               </div>
 
@@ -335,27 +332,27 @@ export default function DealTemplateModal({ deal, onClose, onSave }: DealTemplat
                   <tbody>
                     <tr className="border-b border-black">
                       <td className="p-2 border-r border-black">Advocate Fee</td>
-                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.advocateFee} onChange={e => handleInputChange('advocateFee', e.target.value)} /></td>
+                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.advocateFee} onChange={e => handleInputChange('advocateFee', e.target.value)} placeholder="0" /></td>
                       <td className="p-0"><input type="text" className="w-full h-full p-2 outline-none bg-transparent" /></td>
                     </tr>
                     <tr className="border-b border-black">
                       <td className="p-2 border-r border-black">Govt Receipt</td>
-                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.govtReceipt} onChange={e => handleInputChange('govtReceipt', e.target.value)} /></td>
+                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.govtReceipt} onChange={e => handleInputChange('govtReceipt', e.target.value)} placeholder="0" /></td>
                       <td className="p-0"><input type="text" className="w-full h-full p-2 outline-none bg-transparent" /></td>
                     </tr>
                     <tr className="border-b border-black">
-                      <td className="p-2 border-r border-black">Stamp Duty (5% of White Value)</td>
-                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.stampDuty || (whiteValueTotal * 0.05).toFixed(0)} onChange={e => handleInputChange('stampDuty', e.target.value)} /></td>
+                      <td className="p-2 border-r border-black">Stamp Duty</td>
+                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.stampDuty} onChange={e => handleInputChange('stampDuty', e.target.value)} placeholder="0" /></td>
                       <td className="p-0"><input type="text" className="w-full h-full p-2 outline-none bg-transparent" /></td>
                     </tr>
                     <tr className="border-b border-black">
-                      <td className="p-2 border-r border-black">Society Charges (₹200 per Gaj)</td>
-                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.societyCharges || (parseFloat(templateDetails.sqYards || "0") * 200).toFixed(0)} onChange={e => handleInputChange('societyCharges', e.target.value)} /></td>
+                      <td className="p-2 border-r border-black">Society Charges</td>
+                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.societyCharges} onChange={e => handleInputChange('societyCharges', e.target.value)} placeholder="0" /></td>
                       <td className="p-0"><input type="text" className="w-full h-full p-2 outline-none bg-transparent" /></td>
                     </tr>
                     <tr>
                       <td className="p-2 border-r border-black">Demarcation</td>
-                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.demarcationFee} onChange={e => handleInputChange('demarcationFee', e.target.value)} /></td>
+                      <td className="p-0 border-r border-black"><input type="number" className="w-full h-full p-2 outline-none text-right bg-transparent" value={templateDetails.demarcationFee} onChange={e => handleInputChange('demarcationFee', e.target.value)} placeholder="0" /></td>
                       <td className="p-0"><input type="text" className="w-full h-full p-2 outline-none bg-transparent" /></td>
                     </tr>
                   </tbody>
