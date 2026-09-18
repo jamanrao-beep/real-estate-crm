@@ -73,7 +73,7 @@ async function getAllDeals(req, res) {
   try {
     const deals = await prisma.deal.findMany({
       include: {
-        lead: { select: { id: true, name: true } },
+        lead: { select: { id: true, name: true, phone: true, source: true, formAnswers: true } },
         transactions: true,
       },
       orderBy: { createdAt: "desc" },

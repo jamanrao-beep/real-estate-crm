@@ -93,6 +93,14 @@ export default function MyLeadsPage() {
         if (!leadSource.includes("whatsapp") && !leadSource.includes("chatmitra")) return false;
       } else if (sourceFilter === "MANUAL") {
         if (!leadSource.includes("manual") && !leadSource.includes("entry") && !leadSource.includes("test") && !leadSource.includes("direct")) return false;
+      } else if (sourceFilter === "FUN_VALLEY") {
+        if (!leadSource.includes("fun valley") && !leadSource.includes("funvalley")) return false;
+      } else if (sourceFilter === "SAHASTRADHARA") {
+        if (!leadSource.includes("sahastradhara") && !leadSource.includes("sahastra dhara") && !leadSource.includes("sd")) return false;
+      } else if (sourceFilter === "RANI_POKHARI") {
+        if (!leadSource.includes("rani pokhari") && !leadSource.includes("ranipokhari") && !leadSource.includes("rani")) return false;
+      } else if (sourceFilter === "THANO") {
+        if (!leadSource.includes("thano")) return false;
       }
     }
     if (searchQuery.trim()) {
@@ -375,6 +383,10 @@ export default function MyLeadsPage() {
               onChange={(e) => setSourceFilter(e.target.value)}
             >
               <option value="ALL">All Sources ({leads.length})</option>
+              <option value="FUN_VALLEY">Fun Valley</option>
+              <option value="SAHASTRADHARA">Sahastradhara</option>
+              <option value="RANI_POKHARI">Rani Pokhari</option>
+              <option value="THANO">Thano</option>
               <option value="EXCEL">Excel Bulk Imports</option>
               <option value="FB">Meta / FB Leads</option>
               <option value="SHEET">Google Sheets</option>
@@ -451,6 +463,31 @@ export default function MyLeadsPage() {
           >
             All ({leads.length})
           </button>
+
+          {/* Project Chips */}
+          <span className="text-border mx-1">|</span>
+          {[
+            { key: "FUN_VALLEY", name: "Fun Valley", color: "border-cyan-500/30 text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20" },
+            { key: "SAHASTRADHARA", name: "Sahastradhara", color: "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20" },
+            { key: "RANI_POKHARI", name: "Rani Pokhari", color: "border-indigo-500/30 text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" },
+            { key: "THANO", name: "Thano", color: "border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20" },
+          ].map((proj) => {
+            const isSelected = sourceFilter === proj.key;
+            return (
+              <button
+                key={proj.key}
+                type="button"
+                onClick={() => setSourceFilter(isSelected ? "ALL" : proj.key)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  isSelected
+                    ? "bg-ink text-surface border-ink shadow-xs"
+                    : `${proj.color}`
+                }`}
+              >
+                {proj.name}
+              </button>
+            );
+          })}
 
           {/* Category Chips */}
           <span className="text-border mx-1">|</span>

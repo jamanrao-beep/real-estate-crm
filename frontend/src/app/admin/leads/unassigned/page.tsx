@@ -181,6 +181,14 @@ export default function UnassignedLeadsPage() {
         matchesSource = leadSource.includes("whatsapp") || leadSource.includes("chatmitra");
       } else if (sourceFilter === "MANUAL") {
         matchesSource = leadSource.includes("manual") || leadSource.includes("entry") || leadSource.includes("test");
+      } else if (sourceFilter === "FUN_VALLEY") {
+        matchesSource = leadSource.includes("fun valley") || leadSource.includes("funvalley");
+      } else if (sourceFilter === "SAHASTRADHARA") {
+        matchesSource = leadSource.includes("sahastradhara") || leadSource.includes("sahastra dhara") || leadSource.includes("sd");
+      } else if (sourceFilter === "RANI_POKHARI") {
+        matchesSource = leadSource.includes("rani pokhari") || leadSource.includes("ranipokhari") || leadSource.includes("rani");
+      } else if (sourceFilter === "THANO") {
+        matchesSource = leadSource.includes("thano");
       }
 
       return matchesSearch && matchesSource;
@@ -189,6 +197,39 @@ export default function UnassignedLeadsPage() {
 
   const getSourceBadge = (sourceStr: string) => {
     const s = (sourceStr || "").toLowerCase();
+    // Project-specific badges
+    if (s.includes("fun valley") || s.includes("funvalley")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+          {sourceStr || "Fun Valley"}
+        </span>
+      );
+    }
+    if (s.includes("sahastradhara") || s.includes("sahastra dhara") || s.includes("sd")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          {sourceStr || "Sahastradhara"}
+        </span>
+      );
+    }
+    if (s.includes("rani pokhari") || s.includes("ranipokhari") || s.includes("rani")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+          {sourceStr || "Rani Pokhari"}
+        </span>
+      );
+    }
+    if (s.includes("thano")) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          {sourceStr || "Thano"}
+        </span>
+      );
+    }
     if (s.includes("facebook") || s.includes("meta")) {
       return (
         <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
@@ -417,32 +458,78 @@ export default function UnassignedLeadsPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-surface border border-border p-3 sm:p-4 rounded-xl shadow-sm flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
-          <Input
-            type="text"
-            placeholder="Search unassigned leads by name, phone, email, source..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 sm:h-10 text-xs sm:text-sm bg-bg w-full"
-          />
+      <div className="bg-surface border border-border p-3 sm:p-4 rounded-xl shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+            <Input
+              type="text"
+              placeholder="Search unassigned leads by name, phone, email, source..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 sm:h-10 text-xs sm:text-sm bg-bg w-full"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-ink-soft shrink-0" />
+            <Select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="h-9 sm:h-10 text-xs sm:text-sm bg-bg min-w-[170px]"
+            >
+              <option value="ALL">All Sources ({leads.length})</option>
+              <option value="FUN_VALLEY">Fun Valley</option>
+              <option value="SAHASTRADHARA">Sahastradhara</option>
+              <option value="RANI_POKHARI">Rani Pokhari</option>
+              <option value="THANO">Thano</option>
+              <option value="FB">Facebook Lead Ads</option>
+              <option value="SHEET">Google Sheets</option>
+              <option value="EXCEL">Excel Bulk Imports</option>
+              <option value="WHATSAPP">WhatsApp Bot</option>
+              <option value="MANUAL">Manual / Test Leads</option>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-ink-soft shrink-0" />
-          <Select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="h-9 sm:h-10 text-xs sm:text-sm bg-bg min-w-[150px]"
+        {/* Quick Project Filter Chips */}
+        <div className="pt-2 border-t border-border/60 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mr-1">
+            Projects:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSourceFilter("ALL")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              sourceFilter === "ALL"
+                ? "bg-ink text-surface shadow-xs"
+                : "bg-bg text-ink-soft hover:text-ink hover:bg-border/60"
+            }`}
           >
-            <option value="ALL">All Sources ({leads.length})</option>
-            <option value="FB">Facebook Lead Ads</option>
-            <option value="SHEET">Google Sheets</option>
-            <option value="EXCEL">Excel Bulk Imports</option>
-            <option value="WHATSAPP">WhatsApp Bot</option>
-            <option value="MANUAL">Manual / Test Leads</option>
-          </Select>
+            All
+          </button>
+          {[
+            { key: "FUN_VALLEY", name: "Fun Valley", color: "border-cyan-500/30 text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20" },
+            { key: "SAHASTRADHARA", name: "Sahastradhara", color: "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20" },
+            { key: "RANI_POKHARI", name: "Rani Pokhari", color: "border-indigo-500/30 text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" },
+            { key: "THANO", name: "Thano", color: "border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20" },
+          ].map((proj) => {
+            const isSelected = sourceFilter === proj.key;
+            return (
+              <button
+                key={proj.key}
+                type="button"
+                onClick={() => setSourceFilter(isSelected ? "ALL" : proj.key)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  isSelected
+                    ? "bg-ink text-surface border-ink shadow-xs"
+                    : `${proj.color}`
+                }`}
+              >
+                {proj.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 

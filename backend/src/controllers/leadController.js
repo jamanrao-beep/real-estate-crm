@@ -18,13 +18,36 @@ async function getUnassignedLeads(req, res) {
 // GET /api/leads  (admin: all leads, optionally filtered)
 async function getAllLeads(req, res) {
   try {
-    const { salesPersonId, category, funnelStage } = req.query;
+    const { salesPersonId, category, funnelStage, project, source } = req.query;
+
+    const projectFilter = project ? [
+      { source: { contains: project, mode: "insensitive" } },
+      ...(project.toLowerCase().includes("rani") ? [
+        { source: { contains: "ranipokhari", mode: "insensitive" } },
+        { source: { contains: "rani pokhari", mode: "insensitive" } },
+        { source: { contains: "rani", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("fun") ? [
+        { source: { contains: "fun valley", mode: "insensitive" } },
+        { source: { contains: "funvalley", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("sahastra") ? [
+        { source: { contains: "sahastradhara", mode: "insensitive" } },
+        { source: { contains: "sahastra dhara", mode: "insensitive" } },
+        { source: { contains: "sd project", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("thano") ? [
+        { source: { contains: "thano", mode: "insensitive" } }
+      ] : [])
+    ] : null;
 
     const leads = await prisma.lead.findMany({
       where: {
         ...(salesPersonId && { assignedToId: salesPersonId }),
         ...(category && { category }),
         ...(funnelStage && { funnelStage }),
+        ...(source && { source: { contains: source, mode: "insensitive" } }),
+        ...(projectFilter && { OR: projectFilter }),
       },
       include: { assignedTo: { select: { id: true, name: true } } },
       orderBy: { dateReceived: "desc" },
@@ -39,13 +62,37 @@ async function getAllLeads(req, res) {
 // GET /api/leads/mine  (sales person: only their own leads — section 5.1)
 async function getMyLeads(req, res) {
   try {
-    const { category, funnelStage } = req.query;
+    const { category, funnelStage, project, source } = req.query;
+
+    const projectFilter = project ? [
+      { source: { contains: project, mode: "insensitive" } },
+      ...(project.toLowerCase().includes("rani") ? [
+        { source: { contains: "ranipokhari", mode: "insensitive" } },
+        { source: { contains: "rani pokhari", mode: "insensitive" } },
+        { source: { contains: "rani", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("fun") ? [
+        { source: { contains: "fun valley", mode: "insensitive" } },
+        { source: { contains: "funvalley", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("sahastra") ? [
+        { source: { contains: "sahastradhara", mode: "insensitive" } },
+        { source: { contains: "sahastra dhara", mode: "insensitive" } },
+        { source: { contains: "sd project", mode: "insensitive" } }
+      ] : []),
+      ...(project.toLowerCase().includes("thano") ? [
+        { source: { contains: "thano", mode: "insensitive" } }
+      ] : [])
+    ] : null;
+
     const leads = await prisma.lead.findMany({
       where: {
         assignedToId: req.user.userId,
         status: "ACTIVE",
         ...(category && { category }),
         ...(funnelStage && { funnelStage }),
+        ...(source && { source: { contains: source, mode: "insensitive" } }),
+        ...(projectFilter && { OR: projectFilter }),
       },
       orderBy: { dateReceived: "desc" },
     });

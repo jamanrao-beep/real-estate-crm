@@ -65,6 +65,7 @@ export default function AllLeadsPage() {
   const [salesPersonId, setSalesPersonId] = useState("");
   const [category, setCategory] = useState("");
   const [funnelStage, setFunnelStage] = useState("");
+  const [project, setProject] = useState("");
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -73,6 +74,7 @@ export default function AllLeadsPage() {
       if (salesPersonId) params.append("salesPersonId", salesPersonId);
       if (category) params.append("category", category);
       if (funnelStage) params.append("funnelStage", funnelStage);
+      if (project) params.append("project", project);
 
       const res = await api.get(`/leads?${params.toString()}`);
       setLeads(res.data);
@@ -81,7 +83,7 @@ export default function AllLeadsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [salesPersonId, category, funnelStage]);
+  }, [salesPersonId, category, funnelStage, project]);
 
   const fetchSalesTeam = async () => {
     try {
@@ -277,66 +279,125 @@ export default function AllLeadsPage() {
       />
 
       {/* Filters - Responsive Grid */}
-      <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-        <div>
-          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
-            Assigned To
-          </label>
-          <Select
-            className="w-full bg-bg h-10 text-sm"
-            value={salesPersonId}
-            onChange={(e) => setSalesPersonId(e.target.value)}
-          >
-            <option value="">Any Rep</option>
-            {salesTeam.map((rep) => (
-              <option key={rep.id} value={rep.id}>
-                {rep.name}
-              </option>
-            ))}
-          </Select>
+      <div className="bg-surface border border-border p-3.5 sm:p-4 rounded-xl shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Project / Source
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+            >
+              <option value="">All Projects / Sources</option>
+              <option value="Fun Valley">Fun Valley</option>
+              <option value="Sahastradhara">Sahastradhara</option>
+              <option value="Rani Pokhari">Rani Pokhari</option>
+              <option value="Thano">Thano</option>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Assigned To
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={salesPersonId}
+              onChange={(e) => setSalesPersonId(e.target.value)}
+            >
+              <option value="">Any Rep</option>
+              {salesTeam.map((rep) => (
+                <option key={rep.id} value={rep.id}>
+                  {rep.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Category
+            </label>
+            <Select className="w-full bg-bg h-10 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">Any Category</option>
+              <option value="HOT">Hot 🔥</option>
+              <option value="WARM">Warm 🌤️</option>
+              <option value="COLD">Cold ❄️</option>
+            </Select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
+              Funnel Stage
+            </label>
+            <Select
+              className="w-full bg-bg h-10 text-sm"
+              value={funnelStage}
+              onChange={(e) => setFunnelStage(e.target.value)}
+            >
+              <option value="">Any Stage</option>
+              <option value="INTERESTED">Interested</option>
+              <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
+              <option value="SITE_VISIT_DONE">Site Visit Done</option>
+              <option value="DEAL_CLOSED">Deal Closed</option>
+              <option value="NOT_INTERESTED">Not Interested</option>
+              <option value="LOST">Lost</option>
+            </Select>
+          </div>
+          <div>
+            <Button
+              variant="outline"
+              className="w-full h-10 text-xs sm:text-sm justify-center"
+              onClick={() => {
+                setProject("");
+                setSalesPersonId("");
+                setCategory("");
+                setFunnelStage("");
+              }}
+            >
+              <Filter size={14} className="mr-1.5" />
+              Clear Filters
+            </Button>
+          </div>
         </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
-            Category
-          </label>
-          <Select className="w-full bg-bg h-10 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">Any Category</option>
-            <option value="HOT">Hot 🔥</option>
-            <option value="WARM">Warm 🌤️</option>
-            <option value="COLD">Cold ❄️</option>
-          </Select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
-            Funnel Stage
-          </label>
-          <Select
-            className="w-full bg-bg h-10 text-sm"
-            value={funnelStage}
-            onChange={(e) => setFunnelStage(e.target.value)}
+
+        {/* Quick Project Filter Chips */}
+        <div className="pt-2 border-t border-border/60 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mr-1">
+            Projects:
+          </span>
+          <button
+            type="button"
+            onClick={() => setProject("")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              !project
+                ? "bg-ink text-surface shadow-xs"
+                : "bg-bg text-ink-soft hover:text-ink hover:bg-border/60"
+            }`}
           >
-            <option value="">Any Stage</option>
-            <option value="INTERESTED">Interested</option>
-            <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
-            <option value="SITE_VISIT_DONE">Site Visit Done</option>
-            <option value="DEAL_CLOSED">Deal Closed</option>
-            <option value="NOT_INTERESTED">Not Interested</option>
-            <option value="LOST">Lost</option>
-          </Select>
-        </div>
-        <div>
-          <Button
-            variant="outline"
-            className="w-full h-10 text-xs sm:text-sm justify-center"
-            onClick={() => {
-              setSalesPersonId("");
-              setCategory("");
-              setFunnelStage("");
-            }}
-          >
-            <Filter size={14} className="mr-1.5" />
-            Clear Filters
-          </Button>
+            All
+          </button>
+          {[
+            { name: "Fun Valley", color: "border-cyan-500/30 text-cyan-700 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20" },
+            { name: "Sahastradhara", color: "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20" },
+            { name: "Rani Pokhari", color: "border-indigo-500/30 text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20" },
+            { name: "Thano", color: "border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20" },
+          ].map((proj) => {
+            const isSelected = project === proj.name;
+            return (
+              <button
+                key={proj.name}
+                type="button"
+                onClick={() => setProject(isSelected ? "" : proj.name)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  isSelected
+                    ? "bg-ink text-surface border-ink shadow-xs"
+                    : `${proj.color}`
+                }`}
+              >
+                {proj.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
