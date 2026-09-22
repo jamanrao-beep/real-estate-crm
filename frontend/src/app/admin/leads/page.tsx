@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus, Download } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus, Download, MessageSquare } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -23,11 +23,37 @@ interface Lead {
   dateReceived: string;
   followUpAt?: string | null;
   followUpNotes?: string | null;
+  callLogs?: {
+    id: string;
+    notes?: string | null;
+    createdAt?: string;
+  }[];
   aiChatHistory?: any;
   assignedTo: {
     id: string;
     name: string;
   } | null;
+}
+
+function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
+  const list: { note: string; date?: string }[] = [];
+  if (Array.isArray(lead.callLogs)) {
+    for (const cl of lead.callLogs) {
+      if (cl.notes && cl.notes.trim()) {
+        list.push({
+          note: cl.notes.trim(),
+          date: cl.createdAt ? new Date(cl.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : undefined
+        });
+      }
+    }
+  }
+  if (lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim()) {
+    const cn = lead.formAnswers.callNotes.trim();
+    if (!list.some(item => item.note === cn)) {
+      list.unshift({ note: cn });
+    }
+  }
+  return list;
 }
 
 function formatFollowUpDate(dateStr: string) {
@@ -147,6 +173,7 @@ export default function AllLeadsPage() {
       "Occupation",
       "Location",
       "Budget",
+      "Call Notes",
       "Notes",
       "Category",
       "Funnel Stage",
@@ -163,23 +190,30 @@ export default function AllLeadsPage() {
       return `"${str}"`;
     };
 
-    const rows = leads.map((lead) => [
-      escapeCSV(lead.name),
-      escapeCSV(lead.phone),
-      escapeCSV(lead.email || ""),
-      escapeCSV(lead.source || "Direct"),
-      escapeCSV(lead.formAnswers?.occupation || ""),
-      escapeCSV(lead.formAnswers?.location || ""),
-      escapeCSV(lead.formAnswers?.budget || ""),
-      escapeCSV(lead.formAnswers?.notes || ""),
-      escapeCSV(lead.category || ""),
-      escapeCSV(lead.funnelStage || ""),
-      escapeCSV(lead.status),
-      escapeCSV(lead.assignedTo?.name || "Unassigned"),
-      escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
-      escapeCSV(lead.followUpNotes || ""),
-      escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN") : ""),
-    ]);
+    const rows = leads.map((lead) => {
+      const callNotesList = getLeadCallNotes(lead);
+      const callNotesFormatted = callNotesList.map(c => c.date ? `[${c.date}] ${c.note}` : c.note).join(" | ");
+      const combinedNotes = callNotesFormatted || lead.formAnswers?.notes || "";
+
+      return [
+        escapeCSV(lead.name),
+        escapeCSV(lead.phone),
+        escapeCSV(lead.email || ""),
+        escapeCSV(lead.source || "Direct"),
+        escapeCSV(lead.formAnswers?.occupation || ""),
+        escapeCSV(lead.formAnswers?.location || ""),
+        escapeCSV(lead.formAnswers?.budget || ""),
+        escapeCSV(callNotesFormatted),
+        escapeCSV(combinedNotes),
+        escapeCSV(lead.category || ""),
+        escapeCSV(lead.funnelStage || ""),
+        escapeCSV(lead.status),
+        escapeCSV(lead.assignedTo?.name || "Unassigned"),
+        escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
+        escapeCSV(lead.followUpNotes || ""),
+        escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN") : ""),
+      ];
+    });
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -493,6 +527,38 @@ export default function AllLeadsPage() {
                           )}
                         </div>
                       )}
+
+                      {/* Call Notes Box (Sky Blue) */}
+                      {(() => {
+                        const callNotesList = getLeadCallNotes(lead);
+                        if (callNotesList.length === 0) return null;
+                        return (
+                          <div className="mt-2 p-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200 text-xs flex flex-col gap-1 transition-all">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="flex items-center gap-1.5 font-semibold text-sky-800 dark:text-sky-300">
+                                <MessageSquare size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                                <span>Note{callNotesList.length > 1 ? `s (${callNotesList.length})` : ""}</span>
+                              </span>
+                              {callNotesList[0].date && (
+                                <span className="text-[10px] text-sky-800/70 dark:text-sky-300/70 font-normal">{callNotesList[0].date}</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-ink/85 italic break-words">
+                              &ldquo;{callNotesList[0].note}&rdquo;
+                            </div>
+                            {callNotesList.length > 1 && (
+                              <div className="mt-1 pt-1 border-t border-sky-500/20 space-y-1">
+                                {callNotesList.slice(1).map((cn, idx) => (
+                                  <div key={idx} className="text-[10px] text-ink/75 flex items-start justify-between gap-1">
+                                    <span className="italic break-words">• &ldquo;{cn.note}&rdquo;</span>
+                                    {cn.date && <span className="shrink-0 text-[9px] opacity-75">{cn.date}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 align-top">
                       <div>
@@ -698,6 +764,38 @@ export default function AllLeadsPage() {
                   )}
                 </div>
               )}
+
+              {/* Call Notes Box for Mobile (Sky Blue) */}
+              {(() => {
+                const callNotesList = getLeadCallNotes(lead);
+                if (callNotesList.length === 0) return null;
+                return (
+                  <div className="p-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200 text-xs flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="flex items-center gap-1.5 font-semibold text-sky-800 dark:text-sky-300">
+                        <MessageSquare size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                        <span>Note{callNotesList.length > 1 ? `s (${callNotesList.length})` : ""}</span>
+                      </span>
+                      {callNotesList[0].date && (
+                        <span className="text-[10px] text-sky-800/70 dark:text-sky-300/70 font-normal">{callNotesList[0].date}</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-ink/85 italic break-words">
+                      &ldquo;{callNotesList[0].note}&rdquo;
+                    </div>
+                    {callNotesList.length > 1 && (
+                      <div className="mt-1 pt-1 border-t border-sky-500/20 space-y-1">
+                        {callNotesList.slice(1).map((cn, idx) => (
+                          <div key={idx} className="text-[10px] text-ink/75 flex items-start justify-between gap-1">
+                            <span className="italic break-words">• &ldquo;{cn.note}&rdquo;</span>
+                            {cn.date && <span className="shrink-0 text-[9px] opacity-75">{cn.date}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))
         )}

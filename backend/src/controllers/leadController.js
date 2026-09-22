@@ -49,7 +49,13 @@ async function getAllLeads(req, res) {
         ...(source && { source: { contains: source, mode: "insensitive" } }),
         ...(projectFilter && { OR: projectFilter }),
       },
-      include: { assignedTo: { select: { id: true, name: true } } },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true },
+        },
+      },
       orderBy: { dateReceived: "desc" },
     });
     return res.json(leads);
@@ -93,6 +99,12 @@ async function getMyLeads(req, res) {
         ...(funnelStage && { funnelStage }),
         ...(source && { source: { contains: source, mode: "insensitive" } }),
         ...(projectFilter && { OR: projectFilter }),
+      },
+      include: {
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true },
+        },
       },
       orderBy: { dateReceived: "desc" },
     });

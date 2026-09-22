@@ -47,6 +47,9 @@ async function logCall(req, res) {
     if (occupation !== undefined && occupation !== null) currentFormAnswers.occupation = occupation;
     if (location !== undefined && location !== null) currentFormAnswers.location = location;
     if (budget !== undefined && budget !== null) currentFormAnswers.budget = budget;
+    if (notes && typeof notes === "string" && notes.trim()) {
+      currentFormAnswers.callNotes = notes.trim();
+    }
 
     await prisma.lead.update({
       where: { id: leadId },
