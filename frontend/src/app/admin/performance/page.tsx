@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
-import { RefreshCw, TrendingUp, Phone, Users, DollarSign, FileDown } from "lucide-react";
+import { RefreshCw, TrendingUp, Phone, Users, DollarSign, FileDown, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface PerformanceResult {
@@ -27,35 +27,117 @@ interface PerformanceResult {
 export default function PerformanceDashboard() {
   const [results, setResults] = useState<PerformanceResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterMode, setFilterMode] = useState<"month" | "date">("month");
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
   const [year, setYear] = useState(new Date().getFullYear().toString());
 
-  const fetchPerformance = async () => {
+  // Format today's date in local YYYY-MM-DD
+  const getTodayStr = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayStr);
+
+  const shiftDate = (days: number) => {
+    if (!selectedDate) return;
+    const [y, m, d] = selectedDate.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setDate(dateObj.getDate() + days);
+    const newY = dateObj.getFullYear();
+    const newM = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const newD = String(dateObj.getDate()).padStart(2, "0");
+    setSelectedDate(`${newY}-${newM}-${newD}`);
+  };
+
+  const setToday = () => {
+    setSelectedDate(getTodayStr());
+  };
+
+  const setYesterday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    setSelectedDate(`${y}-${m}-${day}`);
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const todayStr = getTodayStr();
+
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const yestY = yest.getFullYear();
+    const yestM = String(yest.getMonth() + 1).padStart(2, "0");
+    const yestD = String(yest.getDate()).padStart(2, "0");
+    const yestStr = `${yestY}-${yestM}-${yestD}`;
+
+    const formatted = dateObj.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    if (dateStr === todayStr) return `Today (${formatted})`;
+    if (dateStr === yestStr) return `Yesterday (${formatted})`;
+    return formatted;
+  };
+
+  const fetchPerformance = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await api.get(`/reports/performance?month=${month}&year=${year}`);
+      let query = "";
+      if (filterMode === "date" && selectedDate) {
+        const [y, m, d] = selectedDate.split("-").map(Number);
+        const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const endOfDay = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+        query = `date=${selectedDate}&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}&timezoneOffset=${new Date().getTimezoneOffset()}`;
+      } else {
+        query = `month=${month}&year=${year}`;
+      }
+      const res = await api.get(`/reports/performance?${query}`);
       setResults(res.data.results);
     } catch (err) {
       console.error("Failed to fetch performance", err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterMode, month, year, selectedDate]);
 
   useEffect(() => {
     fetchPerformance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, year]);
+  }, [fetchPerformance]);
 
   const handleDownloadCSV = async () => {
     try {
-      const res = await api.get(`/reports/performance/export?month=${month}&year=${year}`, {
+      let query = "";
+      let filename = "";
+      if (filterMode === "date" && selectedDate) {
+        const [y, m, d] = selectedDate.split("-").map(Number);
+        const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
+        const endOfDay = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+        query = `date=${selectedDate}&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}&timezoneOffset=${new Date().getTimezoneOffset()}`;
+        filename = `performance_report_${selectedDate}.csv`;
+      } else {
+        query = `month=${month}&year=${year}`;
+        filename = `performance_report_${year}_${month}.csv`;
+      }
+
+      const res = await api.get(`/reports/performance/export?${query}`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `performance_report_${year}_${month}.csv`);
+      link.setAttribute("download", filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -70,56 +152,154 @@ export default function PerformanceDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Performance Dashboard</h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
-            Monthly metrics across the sales team.
+            {filterMode === "date" ? (
+              <span>
+                Daily performance metrics for <strong className="text-ink">{formatDisplayDate(selectedDate)}</strong>
+              </span>
+            ) : (
+              <span>
+                Monthly metrics for <strong className="text-ink">{new Date(parseInt(year), parseInt(month) - 1).toLocaleString("default", { month: "long" })} {year}</strong>
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 bg-surface p-2 border border-border rounded-xl shadow-sm">
-          <Select
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="w-32 sm:w-36 bg-bg h-9 sm:h-10 text-xs sm:text-sm"
-          >
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={m}>
-                {new Date(0, m - 1).toLocaleString("default", { month: "short" })}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="w-24 sm:w-28 bg-bg h-9 sm:h-10 text-xs sm:text-sm"
-          >
-            {[2024, 2025, 2026].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchPerformance}
-            disabled={isLoading}
-            className="h-9 sm:h-10 px-2.5"
-            title="Refresh"
-          >
-            <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadCSV}
-            disabled={isLoading}
-            className="h-9 sm:h-10 text-xs sm:text-sm flex items-center gap-1.5 font-medium"
-          >
-            <FileDown size={14} />
-            <span className="hidden sm:inline">Export</span> CSV
-          </Button>
+
+        {/* Filter Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 bg-surface p-1.5 sm:p-2 border border-border rounded-xl shadow-xs">
+          {/* Mode Switcher Toggle */}
+          <div className="flex items-center bg-bg p-0.5 rounded-lg border border-border text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setFilterMode("month")}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                filterMode === "month"
+                  ? "bg-surface text-ink font-bold shadow-xs"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              📅 Month
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode("date")}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                filterMode === "date"
+                  ? "bg-surface text-ink font-bold shadow-xs"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              📆 Select Date
+            </button>
+          </div>
+
+          {/* Month & Year Selectors */}
+          {filterMode === "month" && (
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="w-28 sm:w-32 bg-bg h-9 text-xs sm:text-sm"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={m}>
+                    {new Date(0, m - 1).toLocaleString("default", { month: "short" })}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="w-24 bg-bg h-9 text-xs sm:text-sm"
+              >
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {/* Date Selector & Navigation */}
+          {filterMode === "date" && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => shiftDate(-1)}
+                  title="Previous Day"
+                  className="h-9 px-2 bg-bg hover:bg-surface border border-border rounded-l-lg text-ink-soft hover:text-ink text-xs font-bold transition-colors flex items-center justify-center"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="h-9 px-2 bg-bg text-ink text-xs sm:text-sm border-y border-border font-medium focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => shiftDate(1)}
+                  title="Next Day"
+                  className="h-9 px-2 bg-bg hover:bg-surface border border-border rounded-r-lg text-ink-soft hover:text-ink text-xs font-bold transition-colors flex items-center justify-center"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={setToday}
+                  className={`h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors ${
+                    selectedDate === getTodayStr()
+                      ? "bg-accent/15 border-accent text-accent font-bold"
+                      : "bg-bg hover:bg-surface border-border text-ink-soft"
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={setYesterday}
+                  className="h-9 px-2 text-xs font-medium rounded-lg bg-bg hover:bg-surface border border-border text-ink-soft transition-colors"
+                >
+                  Yesterday
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchPerformance}
+              disabled={isLoading}
+              className="h-9 px-2.5"
+              title="Refresh"
+            >
+              <RefreshCw size={14} className={isLoading ? "animate-spin text-accent" : "text-ink-soft"} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadCSV}
+              disabled={isLoading}
+              className="h-9 text-xs sm:text-sm flex items-center gap-1.5 font-medium px-3"
+            >
+              <FileDown size={14} />
+              <span className="hidden sm:inline">Export</span> CSV
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -210,7 +390,14 @@ export default function PerformanceDashboard() {
                     </td>
                     <td className="p-4 align-top text-right">
                       <div className="flex flex-col items-end gap-1.5">
-                        <div className="flex items-center gap-2 text-ink">
+                        <div className="flex items-center gap-1.5 text-ink font-medium">
+                          <span className="text-sm text-ink-soft">Calls</span>
+                          <span className="font-mono font-medium">{r.numberOfCalls}</span>
+                          <span className="text-xs text-ink-soft font-normal">({r.callHours}h)</span>
+                          <Phone size={13} className="text-ink-soft shrink-0" />
+                        </div>
+
+                        <div className="flex items-center gap-2 text-ink mt-0.5">
                           <span className="text-sm text-ink-soft">Site Visits</span>
                           <span className="font-mono font-medium">{r.siteVisitsDone || 0}</span>
                         </div>
@@ -222,7 +409,7 @@ export default function PerformanceDashboard() {
                           %
                         </div>
 
-                        <div className="flex items-center gap-2 text-ink mt-1">
+                        <div className="flex items-center gap-2 text-ink mt-0.5">
                           <span className="text-sm text-ink-soft">Office Visits</span>
                           <span className="font-mono font-medium">{r.officeVisitsDone || 0}</span>
                         </div>
@@ -271,7 +458,7 @@ export default function PerformanceDashboard() {
           </div>
         ) : results.length === 0 ? (
           <div className="bg-surface border border-border rounded-xl p-8 text-center text-ink-soft">
-            No sales team data for this month.
+            No sales team data for this period.
           </div>
         ) : (
           results.map((r) => {
@@ -294,19 +481,20 @@ export default function PerformanceDashboard() {
                     <span className="font-bold text-ink text-sm">{r.totalLeadsReceived} Rec / {r.totalLeadsConverted} Won</span>
                   </div>
                   <div className="bg-bg p-2.5 rounded-lg border border-border/60">
+                    <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Calls</span>
+                    <span className="font-bold text-ink text-sm">{r.numberOfCalls} calls ({r.callHours}h)</span>
+                  </div>
+                  <div className="bg-bg p-2.5 rounded-lg border border-border/60">
                     <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Visits</span>
                     <span className="font-bold text-ink text-sm">
-                      {r.siteVisitsDone || 0} Site ({r.totalLeadsReceived ? Math.round(((r.siteVisitsDone || 0) / r.totalLeadsReceived) * 100) : 0}%)
-                    </span>
-                    <span className="text-[11px] text-ink-soft block mt-0.5">
-                      {r.officeVisitsDone || 0} Office ({r.totalLeadsReceived ? Math.round(((r.officeVisitsDone || 0) / r.totalLeadsReceived) * 100) : 0}%)
+                      {r.siteVisitsDone || 0} Site / {r.officeVisitsDone || 0} Office
                     </span>
                   </div>
                   <div className="bg-bg p-2.5 rounded-lg border border-border/60">
                     <span className="text-[10px] text-ink-soft uppercase tracking-wider block">Sales Value</span>
                     <span className="font-bold text-ink text-sm">{formatCurrency(r.totalSalesValueClosed)}</span>
                   </div>
-                  <div className="bg-success/10 p-2.5 rounded-lg border border-success/30">
+                  <div className="bg-success/10 p-2.5 rounded-lg border border-success/30 col-span-2">
                     <span className="text-[10px] text-success uppercase tracking-wider block font-semibold">Collected</span>
                     <span className="font-bold text-success text-sm">{formatCurrency(r.totalPaymentsCollected)}</span>
                   </div>

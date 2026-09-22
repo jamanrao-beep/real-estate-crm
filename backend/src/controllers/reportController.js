@@ -12,6 +12,58 @@ function resolveMonthRange(month, year) {
   return { start, end };
 }
 
+// Resolves query params (date, startDate/endDate, month/year) into precise [start, end) Date objects.
+// Highly accurate: handles explicit ISO range, exact calendar date in local timezone (IST default), or month.
+function resolvePeriodRange(query = {}) {
+  const { date, startDate, endDate, month, year, timezoneOffset } = query;
+
+  // 1. Explicit startDate and endDate passed from client browser (highest accuracy)
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      return {
+        start,
+        end,
+        label: date || start.toISOString().split("T")[0],
+        isDate: true,
+      };
+    }
+  }
+
+  // 2. Specific single date passed (YYYY-MM-DD)
+  if (date && typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    const trimmed = date.trim();
+    const [y, m, d] = trimmed.split("-").map(Number);
+    // If timezoneOffset is passed in minutes (e.g. -330 for UTC+5:30 IST)
+    const offsetMin = timezoneOffset !== undefined && !isNaN(parseInt(timezoneOffset, 10))
+      ? parseInt(timezoneOffset, 10)
+      : -330; // default to IST (+05:30)
+
+    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0, 0) + (offsetMin * 60 * 1000);
+    const endUtcMs = Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0) + (offsetMin * 60 * 1000);
+
+    return {
+      start: new Date(startUtcMs),
+      end: new Date(endUtcMs),
+      label: trimmed,
+      isDate: true,
+    };
+  }
+
+  // 3. Fallback to month & year
+  const { start, end } = resolveMonthRange(month, year);
+  const now = new Date();
+  const y = year ? parseInt(year, 10) : now.getFullYear();
+  const m = month ? parseInt(month, 10) : now.getMonth() + 1;
+  return {
+    start,
+    end,
+    label: `${y}-${String(m).padStart(2, "0")}`,
+    isDate: false,
+  };
+}
+
 // Core aggregation for one sales person over a date range.
 // This is the PRD 4.3 dashboard, computed field by field.
 async function computePerformance(salesPersonId, start, end) {
@@ -37,12 +89,23 @@ async function computePerformance(salesPersonId, start, end) {
       where: {
         assignedToId: salesPersonId,
         funnelStage: "DEAL_CLOSED",
-        statusHistory: {
-          some: {
-            stage: "DEAL_CLOSED",
-            changedAt: { gte: start, lt: end },
+        OR: [
+          {
+            statusHistory: {
+              some: {
+                stage: "DEAL_CLOSED",
+                changedAt: { gte: start, lt: end },
+              },
+            },
           },
-        },
+          {
+            deals: {
+              some: {
+                createdAt: { gte: start, lt: end },
+              },
+            },
+          },
+        ],
       },
     }),
 
@@ -136,12 +199,11 @@ async function computePerformance(salesPersonId, start, end) {
   };
 }
 
-// GET /api/reports/performance/:salesPersonId?month=&year=
+// GET /api/reports/performance/:salesPersonId?month=&year=&date=
 async function getSalesPersonPerformance(req, res) {
   try {
     const { salesPersonId } = req.params;
-    const { month, year } = req.query;
-    const { start, end } = resolveMonthRange(month, year);
+    const { start, end, label, isDate } = resolvePeriodRange(req.query);
 
     const salesPerson = await prisma.user.findUnique({ where: { id: salesPersonId } });
     if (!salesPerson || salesPerson.role !== "SALES_PERSON") {
@@ -149,19 +211,22 @@ async function getSalesPersonPerformance(req, res) {
     }
 
     const performance = await computePerformance(salesPersonId, start, end);
-    return res.json({ salesPerson: { id: salesPerson.id, name: salesPerson.name }, period: { start, end }, ...performance });
+    return res.json({
+      salesPerson: { id: salesPerson.id, name: salesPerson.name },
+      period: { start, end, label, isDate },
+      ...performance,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Failed to compute performance report" });
   }
 }
 
-// GET /api/reports/performance?month=&year=
-// All sales people at once — the Admin's monthly overview.
+// GET /api/reports/performance?month=&year=&date=
+// All sales people at once — the Admin's performance overview (Monthly or Daily).
 async function getAllPerformance(req, res) {
   try {
-    const { month, year } = req.query;
-    const { start, end } = resolveMonthRange(month, year);
+    const { start, end, label, isDate } = resolvePeriodRange(req.query);
 
     const salesPeople = await prisma.user.findMany({ where: { role: "SALES_PERSON" } });
 
@@ -172,7 +237,7 @@ async function getAllPerformance(req, res) {
       }))
     );
 
-    return res.json({ period: { start, end }, results });
+    return res.json({ period: { start, end, label, isDate }, results });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Failed to compute performance reports" });
@@ -256,8 +321,7 @@ async function exportMyTransactions(req, res) {
 // GET /api/reports/performance/export
 async function exportPerformance(req, res) {
   try {
-    const { month, year } = req.query;
-    const { start, end } = resolveMonthRange(month, year);
+    const { start, end, label, isDate } = resolvePeriodRange(req.query);
 
     const salesPeople = await prisma.user.findMany({ where: { role: "SALES_PERSON" } });
 
@@ -270,6 +334,10 @@ async function exportPerformance(req, res) {
         };
       })
     );
+
+    const periodStr = isDate
+      ? label
+      : `${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`;
 
     const flatResults = results.map(r => ({
       Sales_Person: r.salesPersonName,
@@ -284,7 +352,7 @@ async function exportPerformance(req, res) {
       Call_Hours: r.callHours,
       Total_Sales_Value: r.totalSalesValueClosed,
       Total_Payments_Collected: r.totalPaymentsCollected,
-      Period: `${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`
+      Period: periodStr
     }));
 
     const csv = toCSV(flatResults, [
@@ -303,8 +371,9 @@ async function exportPerformance(req, res) {
       { label: "Period", value: "Period" },
     ]);
 
+    const filename = `performance_report_${label}.csv`;
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=performance_report.csv");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
     return res.send(csv);
   } catch (err) {
     console.error(err);
