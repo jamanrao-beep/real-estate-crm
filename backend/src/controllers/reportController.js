@@ -12,30 +12,55 @@ function resolveMonthRange(month, year) {
   return { start, end };
 }
 
-// Resolves query params (date, startDate/endDate, month/year) into precise [start, end) Date objects.
-// Highly accurate: handles explicit ISO range, exact calendar date in local timezone (IST default), or month.
+// Resolves query params (date, fromDate/toDate, startDate/endDate, month/year) into precise [start, end) Date objects.
+// Highly accurate: handles explicit ISO range, custom date range (From Date to To Date), exact single date, or month.
 function resolvePeriodRange(query = {}) {
-  const { date, startDate, endDate, month, year, timezoneOffset } = query;
+  const { date, startDate, endDate, fromDate, toDate, month, year, timezoneOffset } = query;
 
-  // 1. Explicit startDate and endDate passed from client browser (highest accuracy)
-  if (startDate && endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+  // 1. Explicit fromDate & toDate (YYYY-MM-DD to YYYY-MM-DD)
+  if (fromDate && toDate && typeof fromDate === "string" && typeof toDate === "string") {
+    const fromParts = fromDate.trim().split("-").map(Number);
+    const toParts = toDate.trim().split("-").map(Number);
+    if (fromParts.length === 3 && toParts.length === 3) {
+      const [fy, fm, fd] = fromParts;
+      const [ty, tm, td] = toParts;
+      const offsetMin = timezoneOffset !== undefined && !isNaN(parseInt(timezoneOffset, 10))
+        ? parseInt(timezoneOffset, 10)
+        : -330; // default to IST (+05:30)
+
+      const startUtcMs = Date.UTC(fy, fm - 1, fd, 0, 0, 0, 0) + (offsetMin * 60 * 1000);
+      const endUtcMs = Date.UTC(ty, tm - 1, td + 1, 0, 0, 0, 0) + (offsetMin * 60 * 1000);
+
       return {
-        start,
-        end,
-        label: date || start.toISOString().split("T")[0],
-        isDate: true,
+        start: new Date(startUtcMs),
+        end: new Date(endUtcMs),
+        label: `${fromDate.trim()} to ${toDate.trim()}`,
+        isDate: false,
+        isRange: true,
       };
     }
   }
 
-  // 2. Specific single date passed (YYYY-MM-DD)
+  // 2. Explicit startDate and endDate passed from client browser (ISO strings)
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      const isSingleDay = !!date && !fromDate && !toDate;
+      return {
+        start,
+        end,
+        label: date || (fromDate && toDate ? `${fromDate} to ${toDate}` : `${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]}`),
+        isDate: isSingleDay,
+        isRange: !isSingleDay,
+      };
+    }
+  }
+
+  // 3. Specific single date passed (YYYY-MM-DD)
   if (date && typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
     const trimmed = date.trim();
     const [y, m, d] = trimmed.split("-").map(Number);
-    // If timezoneOffset is passed in minutes (e.g. -330 for UTC+5:30 IST)
     const offsetMin = timezoneOffset !== undefined && !isNaN(parseInt(timezoneOffset, 10))
       ? parseInt(timezoneOffset, 10)
       : -330; // default to IST (+05:30)
@@ -48,10 +73,11 @@ function resolvePeriodRange(query = {}) {
       end: new Date(endUtcMs),
       label: trimmed,
       isDate: true,
+      isRange: false,
     };
   }
 
-  // 3. Fallback to month & year
+  // 4. Fallback to month & year
   const { start, end } = resolveMonthRange(month, year);
   const now = new Date();
   const y = year ? parseInt(year, 10) : now.getFullYear();
@@ -61,6 +87,7 @@ function resolvePeriodRange(query = {}) {
     end,
     label: `${y}-${String(m).padStart(2, "0")}`,
     isDate: false,
+    isRange: false,
   };
 }
 
@@ -371,7 +398,7 @@ async function exportPerformance(req, res) {
       { label: "Period", value: "Period" },
     ]);
 
-    const filename = `performance_report_${label}.csv`;
+    const filename = `performance_report_${label.replace(/\s+/g, "_")}.csv`;
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
     return res.send(csv);

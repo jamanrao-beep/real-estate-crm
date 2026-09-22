@@ -27,7 +27,7 @@ interface PerformanceResult {
 export default function PerformanceDashboard() {
   const [results, setResults] = useState<PerformanceResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterMode, setFilterMode] = useState<"month" | "date">("month");
+  const [filterMode, setFilterMode] = useState<"month" | "date" | "range">("month");
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
   const [year, setYear] = useState(new Date().getFullYear().toString());
 
@@ -41,6 +41,17 @@ export default function PerformanceDashboard() {
   };
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr);
+
+  // Range state: fromDate and toDate
+  const [fromDate, setFromDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  });
+  const [toDate, setToDate] = useState<string>(getTodayStr);
 
   const shiftDate = (days: number) => {
     if (!selectedDate) return;
@@ -64,6 +75,29 @@ export default function PerformanceDashboard() {
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     setSelectedDate(`${y}-${m}-${day}`);
+  };
+
+  const setRangeLast7Days = () => {
+    const today = new Date();
+    const past = new Date();
+    past.setDate(past.getDate() - 6);
+    setFromDate(past.toISOString().slice(0, 10));
+    setToDate(today.toISOString().slice(0, 10));
+  };
+
+  const setRangeLast30Days = () => {
+    const today = new Date();
+    const past = new Date();
+    past.setDate(past.getDate() - 29);
+    setFromDate(past.toISOString().slice(0, 10));
+    setToDate(today.toISOString().slice(0, 10));
+  };
+
+  const setRangeThisMonth = () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    setFromDate(firstDay.toISOString().slice(0, 10));
+    setToDate(now.toISOString().slice(0, 10));
   };
 
   const formatDisplayDate = (dateStr: string) => {
@@ -91,11 +125,28 @@ export default function PerformanceDashboard() {
     return formatted;
   };
 
+  const formatDisplayRange = (f: string, t: string) => {
+    if (!f || !t) return "";
+    const [fy, fm, fd] = f.split("-").map(Number);
+    const [ty, tm, td] = t.split("-").map(Number);
+    const fromObj = new Date(fy, fm - 1, fd);
+    const toObj = new Date(ty, tm - 1, td);
+    const fromFormatted = fromObj.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const toFormatted = toObj.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return `${fromFormatted} — ${toFormatted}`;
+  };
+
   const fetchPerformance = useCallback(async () => {
     setIsLoading(true);
     try {
       let query = "";
-      if (filterMode === "date" && selectedDate) {
+      if (filterMode === "range" && fromDate && toDate) {
+        const [fy, fm, fd] = fromDate.split("-").map(Number);
+        const [ty, tm, td] = toDate.split("-").map(Number);
+        const startOfDay = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+        const endOfDay = new Date(ty, tm - 1, td + 1, 0, 0, 0, 0);
+        query = `fromDate=${fromDate}&toDate=${toDate}&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}&timezoneOffset=${new Date().getTimezoneOffset()}`;
+      } else if (filterMode === "date" && selectedDate) {
         const [y, m, d] = selectedDate.split("-").map(Number);
         const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
         const endOfDay = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
@@ -110,7 +161,7 @@ export default function PerformanceDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [filterMode, month, year, selectedDate]);
+  }, [filterMode, month, year, selectedDate, fromDate, toDate]);
 
   useEffect(() => {
     fetchPerformance();
@@ -120,7 +171,14 @@ export default function PerformanceDashboard() {
     try {
       let query = "";
       let filename = "";
-      if (filterMode === "date" && selectedDate) {
+      if (filterMode === "range" && fromDate && toDate) {
+        const [fy, fm, fd] = fromDate.split("-").map(Number);
+        const [ty, tm, td] = toDate.split("-").map(Number);
+        const startOfDay = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+        const endOfDay = new Date(ty, tm - 1, td + 1, 0, 0, 0, 0);
+        query = `fromDate=${fromDate}&toDate=${toDate}&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}&timezoneOffset=${new Date().getTimezoneOffset()}`;
+        filename = `performance_report_${fromDate}_to_${toDate}.csv`;
+      } else if (filterMode === "date" && selectedDate) {
         const [y, m, d] = selectedDate.split("-").map(Number);
         const startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0);
         const endOfDay = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
@@ -156,7 +214,11 @@ export default function PerformanceDashboard() {
         <div>
           <h1 className="text-xl sm:text-2xl font-serif text-ink font-bold">Performance Dashboard</h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
-            {filterMode === "date" ? (
+            {filterMode === "range" ? (
+              <span>
+                Performance metrics for <strong className="text-ink">{formatDisplayRange(fromDate, toDate)}</strong>
+              </span>
+            ) : filterMode === "date" ? (
               <span>
                 Daily performance metrics for <strong className="text-ink">{formatDisplayDate(selectedDate)}</strong>
               </span>
@@ -175,7 +237,7 @@ export default function PerformanceDashboard() {
             <button
               type="button"
               onClick={() => setFilterMode("month")}
-              className={`px-3 py-1.5 rounded-md transition-all ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-all ${
                 filterMode === "month"
                   ? "bg-surface text-ink font-bold shadow-xs"
                   : "text-ink-soft hover:text-ink"
@@ -186,13 +248,24 @@ export default function PerformanceDashboard() {
             <button
               type="button"
               onClick={() => setFilterMode("date")}
-              className={`px-3 py-1.5 rounded-md transition-all ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-all ${
                 filterMode === "date"
                   ? "bg-surface text-ink font-bold shadow-xs"
                   : "text-ink-soft hover:text-ink"
               }`}
             >
-              📆 Select Date
+              📆 Single Date
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode("range")}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-all ${
+                filterMode === "range"
+                  ? "bg-surface text-ink font-bold shadow-xs"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              🗓️ Date Range
             </button>
           </div>
 
@@ -224,7 +297,7 @@ export default function PerformanceDashboard() {
             </div>
           )}
 
-          {/* Date Selector & Navigation */}
+          {/* Single Date Selector & Navigation */}
           {filterMode === "date" && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <div className="flex items-center gap-0.5">
@@ -272,6 +345,53 @@ export default function PerformanceDashboard() {
                   className="h-9 px-2 text-xs font-medium rounded-lg bg-bg hover:bg-surface border border-border text-ink-soft transition-colors"
                 >
                   Yesterday
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Date Range Selector (From Date to To Date) */}
+          {filterMode === "range" && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1 bg-bg px-2 py-1 rounded-lg border border-border text-xs">
+                <span className="text-[10px] uppercase font-bold text-ink-soft">From:</span>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="h-7 px-1.5 bg-surface text-ink text-xs rounded border border-border font-medium focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <span className="text-[10px] uppercase font-bold text-ink-soft ml-1">To:</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  min={fromDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="h-7 px-1.5 bg-surface text-ink text-xs rounded border border-border font-medium focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={setRangeLast7Days}
+                  className="h-9 px-2 text-xs font-medium rounded-lg bg-bg hover:bg-surface border border-border text-ink-soft hover:text-ink transition-colors"
+                >
+                  Last 7D
+                </button>
+                <button
+                  type="button"
+                  onClick={setRangeLast30Days}
+                  className="h-9 px-2 text-xs font-medium rounded-lg bg-bg hover:bg-surface border border-border text-ink-soft hover:text-ink transition-colors"
+                >
+                  Last 30D
+                </button>
+                <button
+                  type="button"
+                  onClick={setRangeThisMonth}
+                  className="h-9 px-2 text-xs font-medium rounded-lg bg-bg hover:bg-surface border border-border text-ink-soft hover:text-ink transition-colors"
+                >
+                  This Month
                 </button>
               </div>
             </div>
