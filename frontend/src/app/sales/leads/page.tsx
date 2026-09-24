@@ -94,6 +94,14 @@ function getLeadLastCallDate(lead: Lead): {
   return null;
 }
 
+function toLocalDateString(d: Date): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function formatFollowUpDate(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
@@ -129,14 +137,46 @@ export default function MyLeadsPage() {
   const [sourceFilter, setSourceFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Date Filter State for Daily Reports
+  const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "LAST_7_DAYS" | "CUSTOM">("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [dateTarget, setDateTarget] = useState<"CALL" | "RECEIVED" | "ANY">("CALL");
+
+  const todayStr = toLocalDateString(new Date());
+  const yesterdayObj = new Date();
+  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+  const yesterdayStr = toLocalDateString(yesterdayObj);
+  const weekAgoObj = new Date();
+  weekAgoObj.setDate(weekAgoObj.getDate() - 7);
+  const weekAgoStr = toLocalDateString(weekAgoObj);
+
+  const isDateFilterActive = datePreset !== "ALL" || Boolean(startDate) || Boolean(endDate);
+
+  const applyDatePreset = (preset: "ALL" | "TODAY" | "YESTERDAY" | "LAST_7_DAYS") => {
+    setDatePreset(preset);
+    setStartDate("");
+    setEndDate("");
+  };
+
   const resetFilters = () => {
     setCategoryFilter("");
     setStageFilter("");
     setSourceFilter("ALL");
     setSearchQuery("");
+    setDatePreset("ALL");
+    setStartDate("");
+    setEndDate("");
+    setDateTarget("CALL");
   };
 
-  const hasActiveFilters = Boolean(categoryFilter || stageFilter || (sourceFilter && sourceFilter !== "ALL") || searchQuery.trim());
+  const hasActiveFilters = Boolean(
+    categoryFilter ||
+    stageFilter ||
+    (sourceFilter && sourceFilter !== "ALL") ||
+    searchQuery.trim() ||
+    isDateFilterActive
+  );
 
   // Dynamic filter logic
   const filteredLeads = leads.filter((lead) => {
@@ -179,8 +219,60 @@ export default function MyLeadsPage() {
         return false;
       }
     }
+
+    // Date / Daily Report Filter
+    if (isDateFilterActive) {
+      const callDates: string[] = [];
+      if (Array.isArray(lead.callLogs)) {
+        for (const cl of lead.callLogs) {
+          if (cl.createdAt) {
+            const d = new Date(cl.createdAt);
+            const str = toLocalDateString(d);
+            if (str) callDates.push(str);
+          }
+        }
+      }
+
+      let receivedDateStr: string | null = null;
+      if (lead.dateReceived) {
+        const d = new Date(lead.dateReceived);
+        const str = toLocalDateString(d);
+        if (str) receivedDateStr = str;
+      }
+
+      const matchesCondition = (dStr: string) => {
+        if (!dStr) return false;
+        if (datePreset === "TODAY") return dStr === todayStr;
+        if (datePreset === "YESTERDAY") return dStr === yesterdayStr;
+        if (datePreset === "LAST_7_DAYS") return dStr >= weekAgoStr && dStr <= todayStr;
+        if (datePreset === "CUSTOM") {
+          if (startDate && endDate) return dStr >= startDate && dStr <= endDate;
+          if (startDate) return dStr === startDate;
+          if (endDate) return dStr <= endDate;
+        }
+        return true;
+      };
+
+      const hasMatchingCall = callDates.some(matchesCondition);
+      const hasMatchingReceived = receivedDateStr ? matchesCondition(receivedDateStr) : false;
+
+      if (dateTarget === "CALL" && !hasMatchingCall) return false;
+      if (dateTarget === "RECEIVED" && !hasMatchingReceived) return false;
+      if (dateTarget === "ANY" && !hasMatchingCall && !hasMatchingReceived) return false;
+    }
+
     return true;
   });
+
+  const todayCallCount = leads.filter((l) =>
+    Array.isArray(l.callLogs) &&
+    l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr)
+  ).length;
+
+  const yesterdayCallCount = leads.filter((l) =>
+    Array.isArray(l.callLogs) &&
+    l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === yesterdayStr)
+  ).length;
 
   // Dynamic counts for all 8 filters
   const categoryCounts = {
@@ -287,11 +379,16 @@ export default function MyLeadsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
-    const filterSuffix = hasActiveFilters ? "_filtered" : "_all";
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const filterSuffix = isDateFilterActive
+      ? `_${datePreset === "CUSTOM" && startDate ? startDate : datePreset.toLowerCase()}`
+      : hasActiveFilters ? "_filtered" : "_all";
+
+    const exportFileName = isDateFilterActive
+      ? `daily_report_${datePreset === "CUSTOM" && startDate ? startDate : datePreset === "TODAY" ? todayStr : datePreset.toLowerCase()}.csv`
+      : `my_leads${filterSuffix}_${todayStr}.csv`;
 
     link.href = url;
-    link.setAttribute("download", `my_leads${filterSuffix}_${dateStr}.csv`);
+    link.setAttribute("download", exportFileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -430,11 +527,17 @@ export default function MyLeadsPage() {
             variant="outline"
             size="sm"
             onClick={exportToCSV}
-            className="flex items-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 font-medium"
+            className="flex items-center gap-2 h-9 sm:h-10 text-xs sm:text-sm border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 font-medium shadow-2xs"
             title={hasActiveFilters ? "Export filtered leads as CSV" : "Export all assigned leads as CSV"}
           >
             <Download size={15} />
-            <span>Export CSV {hasActiveFilters ? `(${filteredLeads.length})` : `(${leads.length})`}</span>
+            <span>
+              {isDateFilterActive
+                ? `Export Daily Report (${filteredLeads.length})`
+                : hasActiveFilters
+                ? `Export CSV (${filteredLeads.length})`
+                : `Export CSV (${leads.length})`}
+            </span>
           </Button>
         </div>
       </div>
@@ -531,6 +634,134 @@ export default function MyLeadsPage() {
               Reset Filters
             </Button>
           </div>
+        </div>
+
+        {/* Date Filter & Daily Report Toolbar */}
+        <div className="pt-3 border-t border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider flex items-center gap-1.5 mr-1">
+              <Calendar size={13} className="text-accent" /> Date Filter:
+            </span>
+
+            {/* Presets */}
+            <div className="inline-flex items-center gap-1 bg-bg p-1 rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => applyDatePreset("ALL")}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                  datePreset === "ALL" && !startDate && !endDate
+                    ? "bg-ink text-surface shadow-xs font-semibold"
+                    : "text-ink-soft hover:text-ink hover:bg-surface"
+                }`}
+              >
+                All Time
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset("TODAY")}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  datePreset === "TODAY"
+                    ? "bg-accent text-white shadow-xs font-semibold"
+                    : "text-ink-soft hover:text-ink hover:bg-surface"
+                }`}
+              >
+                <span>📅 Today</span>
+                {todayCallCount > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    datePreset === "TODAY" ? "bg-white/20 text-white" : "bg-accent/15 text-accent"
+                  }`}>
+                    {todayCallCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset("YESTERDAY")}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  datePreset === "YESTERDAY"
+                    ? "bg-accent text-white shadow-xs font-semibold"
+                    : "text-ink-soft hover:text-ink hover:bg-surface"
+                }`}
+              >
+                <span>Yesterday</span>
+                {yesterdayCallCount > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    datePreset === "YESTERDAY" ? "bg-white/20 text-white" : "bg-ink-soft/20 text-ink-soft"
+                  }`}>
+                    {yesterdayCallCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset("LAST_7_DAYS")}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                  datePreset === "LAST_7_DAYS"
+                    ? "bg-accent text-white shadow-xs font-semibold"
+                    : "text-ink-soft hover:text-ink hover:bg-surface"
+                }`}
+              >
+                Last 7 Days
+              </button>
+            </div>
+
+            {/* Custom Date Input */}
+            <div className="flex items-center gap-1.5 bg-bg px-2.5 py-1 rounded-lg border border-border text-xs">
+              <span className="text-[11px] text-ink-soft font-medium">Pick Date:</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setDatePreset("CUSTOM");
+                }}
+                className="h-7 px-1.5 bg-surface text-ink text-xs rounded border border-border font-medium focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              {startDate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setDatePreset("ALL");
+                  }}
+                  className="text-ink-soft hover:text-danger text-sm px-1 leading-none font-bold"
+                  title="Clear custom date"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* Date Match Target */}
+            <div className="flex items-center gap-1.5 bg-bg px-2.5 py-1 rounded-lg border border-border text-xs">
+              <span className="text-[11px] text-ink-soft font-medium">Filter by:</span>
+              <select
+                value={dateTarget}
+                onChange={(e) => setDateTarget(e.target.value as "CALL" | "RECEIVED" | "ANY")}
+                className="bg-transparent text-ink text-xs font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="CALL">Call Date (Calls Made)</option>
+                <option value="RECEIVED">Date Received (New Leads)</option>
+                <option value="ANY">Any (Called or Received)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Quick Export Button when date filter is active */}
+          {isDateFilterActive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToCSV}
+              className="h-8 text-xs font-semibold border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center gap-1.5 self-start md:self-auto shrink-0 shadow-2xs"
+            >
+              <Download size={13} />
+              <span>
+                Export {datePreset === "TODAY" ? "Today's" : datePreset === "YESTERDAY" ? "Yesterday's" : "Daily"} Report ({filteredLeads.length})
+              </span>
+            </Button>
+          )}
         </div>
 
         {/* Quick Filter Chips (The 8 requested filters: Hot, Warm, Cold + 5 Funnel Stages) */}
@@ -685,14 +916,31 @@ export default function MyLeadsPage() {
 
         {/* Live Filter Summary Bar */}
         {hasActiveFilters && (
-          <div className="flex items-center justify-between text-xs text-ink-soft pt-1">
-            <span>
-              Showing <strong className="text-ink">{filteredLeads.length}</strong> of <strong className="text-ink">{leads.length}</strong> leads
-            </span>
+          <div className="flex items-center justify-between text-xs text-ink-soft pt-1 border-t border-border/40">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span>
+                Showing <strong className="text-ink">{filteredLeads.length}</strong> of <strong className="text-ink">{leads.length}</strong> leads
+              </span>
+              {isDateFilterActive && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/10 text-accent font-semibold text-[11px] border border-accent/20">
+                  <Calendar size={11} />
+                  <span>
+                    {datePreset === "TODAY"
+                      ? "Today"
+                      : datePreset === "YESTERDAY"
+                      ? "Yesterday"
+                      : datePreset === "LAST_7_DAYS"
+                      ? "Last 7 Days"
+                      : startDate}
+                    {` (${dateTarget === "CALL" ? "Calls Made" : dateTarget === "RECEIVED" ? "New Leads" : "Any Date"})`}
+                  </span>
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={resetFilters}
-              className="text-xs text-accent hover:underline"
+              className="text-xs text-accent hover:underline font-medium"
             >
               Clear all filters
             </button>
