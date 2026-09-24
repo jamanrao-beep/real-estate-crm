@@ -1,6 +1,24 @@
 const axios = require("axios");
 const prisma = require("../prisma");
 
+function normalizeSheetUrl(url) {
+  if (!url) return url;
+  if (url.includes("/export?")) {
+    if (!url.includes("format=csv")) {
+      url += (url.includes("?") ? "&" : "?") + "format=csv";
+    }
+    return url;
+  }
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) {
+    const sheetId = match[1];
+    const gidMatch = url.match(/gid=([0-9]+)/);
+    const gid = gidMatch ? gidMatch[1] : "0";
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  }
+  return url;
+}
+
 const PROJECT_SHEETS = [
   {
     name: "Fun Valley",
@@ -68,9 +86,42 @@ function parseCSV(text) {
   return lines;
 }
 
+// Dynamically locate the true header row index within the first 10 rows
+function findHeaderRowIndex(rows) {
+  const knownHeaders = ["full_name", "full name", "phone_number", "phone", "email", "created_time", "campaign_name", "ad_name"];
+  let bestRowIdx = 0;
+  let bestScore = -1;
+
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const row = rows[i];
+    const lowerCells = row.map(c => (c || "").toLowerCase().trim());
+
+    const hasPhoneData = row.some(c => /^p:\+?\d{7,15}/i.test(c) || /^\+?\d{10,13}$/.test(c));
+    const hasEmailData = row.some(c => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) && !c.includes("email"));
+
+    let score = 0;
+    for (const h of knownHeaders) {
+      if (lowerCells.includes(h)) {
+        score += 2;
+      }
+    }
+
+    if (hasPhoneData) score -= 5;
+    if (hasEmailData) score -= 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestRowIdx = i;
+    }
+  }
+
+  return bestRowIdx;
+}
+
 async function syncSingleSheet(project) {
+  const fetchUrl = normalizeSheetUrl(project.url);
   try {
-    const response = await axios.get(project.url, {
+    const response = await axios.get(fetchUrl, {
       timeout: 10000,
       headers: { "Accept": "text/csv" }
     });
@@ -80,7 +131,8 @@ async function syncSingleSheet(project) {
       return { synced: 0, skipped: 0, total: 0, project: project.name };
     }
 
-    const headers = rows[0].map(h => h.toLowerCase().trim());
+    const headerIdx = findHeaderRowIndex(rows);
+    const headers = rows[headerIdx].map(h => (h || "").toLowerCase().trim());
     
     // Helper to find column index by potential header names
     const getIndex = (names) => {
@@ -100,8 +152,9 @@ async function syncSingleSheet(project) {
     let synced = 0;
     let skipped = 0;
 
-    // Process from row 1 onwards
-    for (let i = 1; i < rows.length; i++) {
+    // Process all rows except the header row itself
+    for (let i = 0; i < rows.length; i++) {
+      if (i === headerIdx) continue;
       const row = rows[i];
       if (!row || row.length === 0) continue;
 
@@ -111,8 +164,16 @@ async function syncSingleSheet(project) {
       let createdTime = createdTimeIdx !== -1 ? row[createdTimeIdx] : null;
       let campaign = campaignIdx !== -1 ? row[campaignIdx] : "";
 
-      // Clean phone: strip 'p:', spaces, etc.
+      // Skip secondary header rows if present
+      if (name.toLowerCase() === "full_name" || rawPhone.toLowerCase().includes("phone_number")) {
+        continue;
+      }
+
+      // Clean phone: strip 'p:', spaces, hyphens, brackets
       let phone = rawPhone ? rawPhone.replace(/^p:/i, "").trim() : "";
+      if (phone && !phone.includes("dummy data")) {
+        phone = phone.replace(/[\s\-\(\)]/g, "");
+      }
       if (phone.includes("dummy data")) {
         phone = `${phone} (${project.name})`;
       }
@@ -128,11 +189,24 @@ async function syncSingleSheet(project) {
         continue;
       }
 
+      // Build phone variants for matching (with +91, without +, and 10-digit)
+      const phoneVariants = [];
+      if (phone && !phone.includes("dummy data")) {
+        phoneVariants.push(phone);
+        if (phone.startsWith("+91") && phone.length === 13) {
+          phoneVariants.push(phone.substring(3));
+          phoneVariants.push(phone.substring(1));
+        } else if (phone.length === 10) {
+          phoneVariants.push("+91" + phone);
+          phoneVariants.push("91" + phone);
+        }
+      }
+
       // Check if lead already exists with this phone or email
       const existing = await prisma.lead.findFirst({
         where: {
           OR: [
-            ...(phone ? [{ phone }] : []),
+            ...phoneVariants.map(p => ({ phone: p })),
             ...(email && !email.includes("test@") ? [{ email }] : [])
           ]
         }
@@ -185,12 +259,15 @@ async function syncSingleSheet(project) {
       synced++;
       console.log(`[GoogleSheetSync] [${project.name}] Imported new lead: ${name} (${phone})`);
 
-      // Trigger automated WhatsApp greeting via ChatMitra Bot
+      // Trigger automated WhatsApp greeting via ChatMitra Bot for fresh leads (within last 24h)
       try {
-        const { sendChatMitraLeadGreeting } = require("./chatMitraService");
-        sendChatMitraLeadGreeting(newLead).catch(err =>
-          console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
-        );
+        const isRecent = (Date.now() - dateReceived.getTime()) < (24 * 60 * 60 * 1000);
+        if (isRecent && process.env.CHATMITRA_ENABLED === "true") {
+          const { sendChatMitraLeadGreeting } = require("./chatMitraService");
+          sendChatMitraLeadGreeting(newLead).catch(err =>
+            console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
+          );
+        }
       } catch (err) {
         // ChatMitra optional
       }
@@ -236,4 +313,4 @@ async function syncGoogleSheetLeads() {
   };
 }
 
-module.exports = { syncGoogleSheetLeads, PROJECT_SHEETS };
+module.exports = { syncGoogleSheetLeads, PROJECT_SHEETS, normalizeSheetUrl };
