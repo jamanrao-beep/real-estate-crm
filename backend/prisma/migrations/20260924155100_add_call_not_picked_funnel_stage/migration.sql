@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "FunnelStage" ADD VALUE 'CALL_NOT_PICKED';

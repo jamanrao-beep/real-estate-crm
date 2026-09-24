@@ -183,6 +183,7 @@ export default function MyLeadsPage() {
                         disabled={lead.status === "LOST"}
                       >
                         <option value="" disabled>Set Stage</option>
+                        <option value="CALL_NOT_PICKED">Call Not Picked</option>
                         <option value="INTERESTED">Interested</option>
                         <option value="SITE_VISIT_DONE">Site Visit Done</option>
                         <option value="DEAL_CLOSED">Deal Closed</option>
@@ -266,6 +267,7 @@ export default function MyLeadsPage() {
                       disabled={lead.status === "LOST"}
                     >
                       <option value="" disabled>Set Stage</option>
+                      <option value="CALL_NOT_PICKED">Call Not Picked</option>
                       <option value="INTERESTED">Interested</option>
                       <option value="SITE_VISIT_DONE">Site Visit Done</option>
                       <option value="DEAL_CLOSED">Deal Closed</option>

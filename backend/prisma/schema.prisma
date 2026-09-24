@@ -25,6 +25,7 @@ enum LeadCategory {
 }
 
 enum FunnelStage {
+  CALL_NOT_PICKED
   INTERESTED
   OFFICE_VISIT_DONE
   SITE_VISIT_DONE

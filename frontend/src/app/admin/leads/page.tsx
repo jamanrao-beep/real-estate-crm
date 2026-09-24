@@ -369,6 +369,7 @@ export default function AllLeadsPage() {
               onChange={(e) => setFunnelStage(e.target.value)}
             >
               <option value="">Any Stage</option>
+              <option value="CALL_NOT_PICKED">Call Not Picked</option>
               <option value="INTERESTED">Interested</option>
               <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
               <option value="SITE_VISIT_DONE">Site Visit Done</option>

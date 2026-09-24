@@ -152,6 +152,7 @@ export default function MyLeadsPage() {
   };
 
   const stageCounts = {
+    CALL_NOT_PICKED: leads.filter((l) => l.funnelStage === "CALL_NOT_PICKED").length,
     INTERESTED: leads.filter((l) => l.funnelStage === "INTERESTED").length,
     OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
     SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
@@ -194,6 +195,7 @@ export default function MyLeadsPage() {
     const formatStageLabel = (stage: string | null) => {
       if (!stage) return "";
       switch (stage) {
+        case "CALL_NOT_PICKED": return "Call Not Picked";
         case "INTERESTED": return "Interested";
         case "OFFICE_VISIT_DONE": return "Office Visit Done";
         case "SITE_VISIT_DONE": return "Site Visit Done";
@@ -463,6 +465,7 @@ export default function MyLeadsPage() {
               onChange={(e) => setStageFilter(e.target.value)}
             >
               <option value="">Any Funnel Stage ({leads.length})</option>
+              <option value="CALL_NOT_PICKED">Call Not Picked ({stageCounts.CALL_NOT_PICKED})</option>
               <option value="INTERESTED">Interested ({stageCounts.INTERESTED})</option>
               <option value="OFFICE_VISIT_DONE">Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})</option>
               <option value="SITE_VISIT_DONE">Site Visit Done ({stageCounts.SITE_VISIT_DONE})</option>
@@ -567,6 +570,17 @@ export default function MyLeadsPage() {
 
           {/* Funnel Stage Chips */}
           <span className="text-border mx-1">|</span>
+          <button
+            type="button"
+            onClick={() => setStageFilter(stageFilter === "CALL_NOT_PICKED" ? "" : "CALL_NOT_PICKED")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "CALL_NOT_PICKED"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+            }`}
+          >
+            Call Not Picked ({stageCounts.CALL_NOT_PICKED})
+          </button>
           <button
             type="button"
             onClick={() => setStageFilter(stageFilter === "INTERESTED" ? "" : "INTERESTED")}
@@ -820,6 +834,7 @@ export default function MyLeadsPage() {
                         disabled={lead.status === "LOST"}
                       >
                         <option value="" disabled>Set Stage</option>
+                        <option value="CALL_NOT_PICKED">Call Not Picked</option>
                         <option value="INTERESTED">Interested</option>
                         <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
                         <option value="SITE_VISIT_DONE">Site Visit Done</option>
@@ -1037,6 +1052,7 @@ export default function MyLeadsPage() {
                       disabled={lead.status === "LOST"}
                     >
                       <option value="" disabled>Stage</option>
+                      <option value="CALL_NOT_PICKED">Call Not Picked</option>
                       <option value="INTERESTED">Interested</option>
                       <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
                       <option value="SITE_VISIT_DONE">Site Visit Done</option>

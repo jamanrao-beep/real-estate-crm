@@ -342,8 +342,8 @@ async function updateFunnelStage(req, res) {
     const { id } = req.params;
     const { stage } = req.body;
 
-    if (!["INTERESTED", "OFFICE_VISIT_DONE", "SITE_VISIT_DONE", "DEAL_CLOSED", "NOT_INTERESTED"].includes(stage)) {
-      return res.status(400).json({ error: "stage must be INTERESTED, OFFICE_VISIT_DONE, SITE_VISIT_DONE, DEAL_CLOSED, or NOT_INTERESTED" });
+    if (!["CALL_NOT_PICKED", "INTERESTED", "OFFICE_VISIT_DONE", "SITE_VISIT_DONE", "DEAL_CLOSED", "NOT_INTERESTED"].includes(stage)) {
+      return res.status(400).json({ error: "stage must be CALL_NOT_PICKED, INTERESTED, OFFICE_VISIT_DONE, SITE_VISIT_DONE, DEAL_CLOSED, or NOT_INTERESTED" });
     }
 
     const lead = await prisma.lead.findUnique({ where: { id } });
