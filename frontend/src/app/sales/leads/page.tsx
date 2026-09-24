@@ -56,6 +56,44 @@ function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
   return list;
 }
 
+function getLeadLastCallDate(lead: Lead): {
+  dateStr: string;
+  timeStr?: string;
+  isToday?: boolean;
+  isYesterday?: boolean;
+  totalCalls: number;
+} | null {
+  if (Array.isArray(lead.callLogs) && lead.callLogs.length > 0) {
+    const latest = lead.callLogs.find((cl) => cl.createdAt);
+    if (latest && latest.createdAt) {
+      const date = new Date(latest.createdAt);
+      if (!isNaN(date.getTime())) {
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        const yest = new Date(now);
+        yest.setDate(yest.getDate() - 1);
+        const isYesterday = date.toDateString() === yest.toDateString();
+
+        const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const dateStr = isToday
+          ? "Today"
+          : isYesterday
+          ? "Yesterday"
+          : date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+        return {
+          dateStr,
+          timeStr,
+          isToday,
+          isYesterday,
+          totalCalls: lead.callLogs.length,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 function formatFollowUpDate(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
@@ -180,6 +218,7 @@ export default function MyLeadsPage() {
       "Notes",
       "Category",
       "Funnel Stage",
+      "Call Date",
       "Status",
       "Follow-Up Reminder",
       "Follow-Up Notes",
@@ -220,6 +259,8 @@ export default function MyLeadsPage() {
       const callNotesList = getLeadCallNotes(lead);
       const callNotesFormatted = callNotesList.map(c => c.date ? `[${c.date}] ${c.note}` : c.note).join(" | ");
       const combinedNotes = callNotesFormatted || lead.formAnswers?.notes || "";
+      const lastCallInfo = getLeadLastCallDate(lead);
+      const lastCallFormatted = lastCallInfo ? `${lastCallInfo.dateStr} ${lastCallInfo.timeStr || ""}`.trim() : "Not called yet";
 
       return [
         escapeCSV(lead.name),
@@ -233,6 +274,7 @@ export default function MyLeadsPage() {
         escapeCSV(combinedNotes),
         escapeCSV(formatCategoryLabel(lead.category)),
         escapeCSV(formatStageLabel(lead.funnelStage)),
+        escapeCSV(lastCallFormatted),
         escapeCSV(lead.status),
         escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
         escapeCSV(lead.followUpNotes || ""),
@@ -320,6 +362,11 @@ export default function MyLeadsPage() {
 
       // Update lead in local state so table and cards reflect details immediately
       const cleanCallNotes = callNotes.trim();
+      const newCallLogEntry = {
+        id: "temp-" + Date.now(),
+        notes: cleanCallNotes || null,
+        createdAt: new Date().toISOString()
+      };
       setLeads(prev => prev.map(l => l.id === activeCallLead.id ? {
         ...l,
         formAnswers: {
@@ -329,9 +376,7 @@ export default function MyLeadsPage() {
           budget: budget.trim(),
           ...(cleanCallNotes ? { callNotes: cleanCallNotes } : {}),
         },
-        callLogs: cleanCallNotes
-          ? [{ id: "temp-" + Date.now(), notes: cleanCallNotes, createdAt: new Date().toISOString() }, ...(l.callLogs || [])]
-          : l.callLogs,
+        callLogs: [newCallLogEntry, ...(l.callLogs || [])],
         followUpAt: followUpAt ? new Date(followUpAt).toISOString() : l.followUpAt,
         followUpNotes: followUpAt ? (followUpNotes || null) : l.followUpNotes,
       } : l));
@@ -673,6 +718,9 @@ export default function MyLeadsPage() {
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
                   Funnel Stage
                 </th>
+                <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
+                  Call Date
+                </th>
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider text-right">
                   Actions
                 </th>
@@ -681,19 +729,19 @@ export default function MyLeadsPage() {
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft">
                     Loading your leads...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
                     <Search size={16} /> No leads assigned to you right now.
                   </td>
                 </tr>
               ) : filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-ink-soft">
+                  <td colSpan={6} className="p-8 text-center text-ink-soft">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search size={20} className="text-ink-soft/60" />
                       <p className="font-medium text-ink">No leads match your selected filters</p>
@@ -826,7 +874,7 @@ export default function MyLeadsPage() {
                         <option value="COLD">Cold</option>
                       </Select>
                     </td>
-                    <td className="p-4 align-top w-1/5">
+                    <td className="p-4 align-top w-44">
                       <Select
                         className="w-full"
                         value={lead.funnelStage || ""}
@@ -841,6 +889,43 @@ export default function MyLeadsPage() {
                         <option value="DEAL_CLOSED">Deal Closed</option>
                         <option value="NOT_INTERESTED">Not Interested</option>
                       </Select>
+                    </td>
+                    <td className="p-4 align-top w-36 whitespace-nowrap">
+                      {(() => {
+                        const callInfo = getLeadLastCallDate(lead);
+                        if (!callInfo) {
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-ink-soft/60 italic font-normal">
+                                Not called yet
+                              </span>
+                              <span className="text-[10px] text-ink-soft/40">
+                                Rec&apos;d {new Date(lead.dateReceived).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 font-medium text-xs text-ink">
+                              <Calendar size={12} className="text-accent shrink-0" />
+                              <span className={callInfo.isToday ? "text-emerald-700 dark:text-emerald-400 font-semibold" : ""}>
+                                {callInfo.dateStr}
+                              </span>
+                            </div>
+                            {callInfo.timeStr && (
+                              <div className="text-[11px] text-ink-soft font-mono pl-4">
+                                {callInfo.timeStr}
+                              </div>
+                            )}
+                            {callInfo.totalCalls > 1 && (
+                              <span className="text-[10px] text-ink-soft/70 pl-4">
+                                {callInfo.totalCalls} calls logged
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 align-top text-right">
                       <div className="flex justify-end gap-2">
@@ -1060,6 +1145,29 @@ export default function MyLeadsPage() {
                       <option value="NOT_INTERESTED">Not Interested</option>
                     </Select>
                   </div>
+                </div>
+
+                {/* Call Date on Mobile Card */}
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-border/40">
+                  <span className="text-ink-soft font-medium flex items-center gap-1">
+                    <Calendar size={12} className="text-accent" /> Call Date:
+                  </span>
+                  {(() => {
+                    const callInfo = getLeadLastCallDate(lead);
+                    if (!callInfo) {
+                      return <span className="text-ink-soft/60 italic text-[11px]">Not called yet</span>;
+                    }
+                    return (
+                      <span className="font-medium text-ink text-[11px] flex items-center gap-1.5">
+                        <span className={callInfo.isToday ? "text-emerald-700 dark:text-emerald-400 font-semibold" : ""}>
+                          {callInfo.dateStr}
+                        </span>
+                        {callInfo.timeStr && (
+                          <span className="text-ink-soft font-mono">({callInfo.timeStr})</span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* Card Action Buttons */}
