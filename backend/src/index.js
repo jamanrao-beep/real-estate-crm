@@ -34,6 +34,15 @@ app.get("/api/seed", async (req, res) => {
   const result = await seedDatabase();
   return res.json(result);
 });
+app.get("/api/sync-sheets", async (req, res) => {
+  const { syncGoogleSheetLeads } = require("./services/googleSheetSync");
+  const result = await syncGoogleSheetLeads();
+  return res.json(result);
+});
+app.get("/api/leads/auto-assign-all", async (req, res) => {
+  const { autoAssignLeads } = require("./controllers/leadController");
+  return autoAssignLeads(req, res);
+});
 
 // Start background jobs & seed initial users
 startCronJobs();
