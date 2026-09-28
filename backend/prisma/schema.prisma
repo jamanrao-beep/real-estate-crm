@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // swap to "mysql" or "sqlite" if you prefer
+  provider = "mysql"
 }
 
 // ---------- ENUMS ----------
@@ -93,7 +93,7 @@ model Lead {
   broker       User?        @relation("BrokerLeads", fields: [brokerId], references: [id])
 
   followUpAt   DateTime?    // Next scheduled follow-up time set by Sales Person
-  followUpNotes String?     // Notes / what to ask on follow-up
+  followUpNotes String?     @db.Text // Notes / what to ask on follow-up
 
   dateReceived DateTime     @default(now())
   createdAt    DateTime     @default(now())
@@ -142,9 +142,9 @@ model CallLog {
   startTime     DateTime?
   endTime       DateTime?
   durationSecs  Int?      // store computed duration for easy reporting
-  notes         String?
+  notes         String?   @db.Text
   followUpAt    DateTime?
-  followUpNotes String?
+  followUpNotes String?   @db.Text
 
   createdAt     DateTime  @default(now())
 }
@@ -160,7 +160,7 @@ model Deal {
   
   // Admin Template fields
   plotNumber  String?
-  plotImage   String?       // URL or base64 of the uploaded plot image
+  plotImage   String?       @db.LongText // URL or base64 of the uploaded plot image
   templateDetails Json?     // Any extra dynamic fields filled by Admin
 
   createdAt   DateTime      @default(now())
@@ -194,7 +194,7 @@ model Transaction {
 
 model Notification {
   id        String   @id @default(uuid())
-  message   String
+  message   String   @db.Text
   isRead    Boolean  @default(false)
   userId    String
   user      User     @relation(fields: [userId], references: [id])
