@@ -27,6 +27,7 @@ import {
 import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import TeamDistributionModal, { SalesMember } from "@/components/TeamDistributionModal";
+import { LeadContactButtons } from "@/components/LeadContactButtons";
 
 interface Lead {
   id: string;
@@ -644,6 +645,7 @@ export default function UnassignedLeadsPage() {
                       <div className="font-mono text-xs text-ink-soft mt-1 flex items-center gap-1.5">
                         <Phone size={11} className="text-ink-soft" />
                         <span>{lead.phone}</span>
+                        <LeadContactButtons phone={lead.phone} size="xs" />
                       </div>
                       {lead.email && (
                         <div className="text-xs text-ink-soft mt-0.5 flex items-center gap-1.5">
@@ -738,8 +740,11 @@ export default function UnassignedLeadsPage() {
                       </Badge>
                     )}
                   </div>
-                  <div className="font-mono text-xs text-ink-soft mt-0.5 flex items-center gap-1">
-                    <Phone size={11} /> {lead.phone}
+                  <div className="font-mono text-xs text-ink-soft mt-0.5 flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Phone size={11} /> {lead.phone}
+                    </div>
+                    <LeadContactButtons phone={lead.phone} size="xs" />
                   </div>
                   {lead.email && (
                     <div className="text-xs text-ink-soft flex items-center gap-1">

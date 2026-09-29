@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare } from "lucide-react";
 import { SourceBadge } from "@/components/SourceBadge";
+import { LeadContactButtons } from "@/components/LeadContactButtons";
 
 interface Lead {
   id: string;
@@ -1008,8 +1009,9 @@ export default function MyLeadsPage() {
                         {lead.name}
                         {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
                       </div>
-                      <div className="font-mono text-sm text-ink-soft mt-1">
-                        {lead.phone}
+                      <div className="font-mono text-sm text-ink-soft mt-1 flex items-center gap-2">
+                        <span>{lead.phone}</span>
+                        <LeadContactButtons phone={lead.phone} size="xs" />
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
 
@@ -1243,20 +1245,13 @@ export default function MyLeadsPage() {
                       {lead.name}
                       {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
                     </div>
+                    {lead.phone && <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.phone}</div>}
                     <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.email}</div>
                   </div>
 
-                  {/* Direct Phone Tap Target */}
+                  {/* Direct Phone & WhatsApp Tap Targets */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {lead.phone && (
-                      <a
-                        href={`tel:${lead.phone}`}
-                        className="p-2 rounded-lg bg-accent/10 text-accent hover:bg-accent hover:text-white transition-colors flex items-center justify-center"
-                        title="Call directly"
-                      >
-                        <Phone size={16} />
-                      </a>
-                    )}
+                    <LeadContactButtons phone={lead.phone} size="lg" />
                   </div>
                 </div>
 

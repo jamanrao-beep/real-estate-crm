@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Search, XCircle, Plus } from "lucide-react";
+import { LeadContactButtons } from "@/components/LeadContactButtons";
 
 interface Lead {
   id: string;
@@ -157,8 +158,9 @@ export default function MyLeadsPage() {
                         {lead.name}
                         {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
                       </div>
-                      <div className="font-mono text-sm text-ink-soft mt-1">
-                        {lead.phone}
+                      <div className="font-mono text-sm text-ink-soft mt-1 flex items-center gap-2">
+                        <span>{lead.phone}</span>
+                        <LeadContactButtons phone={lead.phone} size="xs" />
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
                     </td>
@@ -227,7 +229,10 @@ export default function MyLeadsPage() {
                       <span className="font-semibold text-ink text-base">{lead.name}</span>
                       {lead.status === "LOST" && <Badge variant="danger" className="text-[10px]">LOST</Badge>}
                     </div>
-                    <div className="font-mono text-sm text-ink-soft mt-0.5">{lead.phone}</div>
+                    <div className="font-mono text-sm text-ink-soft mt-0.5 flex items-center gap-2">
+                      <span>{lead.phone}</span>
+                      <LeadContactButtons phone={lead.phone} size="xs" />
+                    </div>
                     {lead.email && <div className="text-xs text-ink-soft/80">{lead.email}</div>}
                   </div>
                   {lead.status !== "LOST" && (

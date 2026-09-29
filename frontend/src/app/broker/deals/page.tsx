@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
 import { Search } from "lucide-react";
+import { LeadContactButtons } from "@/components/LeadContactButtons";
 
 interface Lead {
   id: string;
@@ -84,8 +85,9 @@ export default function BrokerDealsPage() {
                       <div className="font-medium text-ink">{lead.name}</div>
                     </td>
                     <td className="p-4 align-top text-right">
-                      <div className="font-mono text-ink-soft">
-                        {lead.phone}
+                      <div className="font-mono text-ink-soft flex items-center justify-end gap-2">
+                        <span>{lead.phone}</span>
+                        <LeadContactButtons phone={lead.phone} size="xs" />
                       </div>
                     </td>
                     <td className="p-4 align-top text-right text-sm text-ink-soft">
@@ -116,7 +118,10 @@ export default function BrokerDealsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-semibold text-ink text-base">{lead.name}</h3>
-                    <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.phone}</div>
+                    <div className="font-mono text-xs text-ink-soft mt-0.5 flex items-center gap-2">
+                      <span>{lead.phone}</span>
+                      <LeadContactButtons phone={lead.phone} size="xs" />
+                    </div>
                   </div>
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-success/10 text-success border border-success/20">
                     Closed

@@ -9,6 +9,7 @@ import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, U
 import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import { SourceBadge } from "@/components/SourceBadge";
+import { LeadContactButtons } from "@/components/LeadContactButtons";
 
 interface Lead {
   id: string;
@@ -480,8 +481,9 @@ export default function AllLeadsPage() {
                   <tr key={lead.id} className="hover:bg-surface/50 transition-colors">
                     <td className="p-4 align-top">
                       <div className="font-medium text-ink">{lead.name}</div>
-                      <div className="font-mono text-sm text-ink-soft mt-1">
-                        {lead.phone}
+                      <div className="font-mono text-sm text-ink-soft mt-1 flex items-center gap-2">
+                        <span>{lead.phone}</span>
+                        <LeadContactButtons phone={lead.phone} size="xs" />
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
 
@@ -653,7 +655,10 @@ export default function AllLeadsPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-ink text-base">{lead.name}</h3>
-                  <div className="font-mono text-xs text-ink-soft mt-0.5">{lead.phone}</div>
+                  <div className="font-mono text-xs text-ink-soft mt-0.5 flex items-center gap-2">
+                    <span>{lead.phone}</span>
+                    <LeadContactButtons phone={lead.phone} size="xs" />
+                  </div>
                   <div className="text-xs text-ink-soft">{lead.email}</div>
                 </div>
                 <div className="text-right">
