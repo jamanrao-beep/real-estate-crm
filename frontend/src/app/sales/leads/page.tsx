@@ -468,6 +468,14 @@ export default function MyLeadsPage() {
   };
 
   const updateStage = async (id: string, stage: string) => {
+    if (stage === "OFFICE_VISIT_DONE") {
+      const lead = leads.find((l) => l.id === id);
+      if (lead) {
+        openOfficeVisitModal(lead);
+        return;
+      }
+    }
+
     try {
       const lead = leads.find((l) => l.id === id);
       let nextCategory = lead?.category;
@@ -1193,7 +1201,6 @@ export default function MyLeadsPage() {
                           phone={lead.phone}
                           size="xs"
                           onLogCall={() => openCallModal(lead)}
-                          onOfficeVisit={() => openOfficeVisitModal(lead)}
                         />
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
@@ -1370,17 +1377,6 @@ export default function MyLeadsPage() {
                           Log Call
                         </Button>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openOfficeVisitModal(lead)}
-                          disabled={lead.status === "LOST"}
-                          className="h-8 text-xs font-medium border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
-                          title="Record Office Visit"
-                        >
-                          <Building2 size={13} className="mr-1 text-amber-600 dark:text-amber-400" />
-                          Office Visit
-                        </Button>
-                        <Button
                           variant="ghost"
                           size="sm"
                           className="h-8 px-2 text-xs text-danger hover:bg-danger/10 hover:text-danger"
@@ -1448,7 +1444,6 @@ export default function MyLeadsPage() {
                       phone={lead.phone}
                       size="lg"
                       onLogCall={() => openCallModal(lead)}
-                      onOfficeVisit={() => openOfficeVisitModal(lead)}
                     />
                   </div>
                 </div>
@@ -1618,16 +1613,6 @@ export default function MyLeadsPage() {
                   >
                     <Phone size={14} className="mr-1 text-accent" />
                     Log Call
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 justify-center py-2 h-9 text-xs font-semibold border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
-                    onClick={() => openOfficeVisitModal(lead)}
-                    disabled={lead.status === "LOST"}
-                  >
-                    <Building2 size={14} className="mr-1 text-amber-600 dark:text-amber-400" />
-                    Office Visit
                   </Button>
                   <Button
                     variant="ghost"
