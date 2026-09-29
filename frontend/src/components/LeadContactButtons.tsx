@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Phone } from "lucide-react";
+import { Phone, Building2, PhoneCall } from "lucide-react";
 
 /**
  * Normalizes phone number into WhatsApp international format.
@@ -104,19 +104,49 @@ export function LeadContactButtons({
   phone,
   size = "sm",
   className = "",
+  onLogCall,
+  onOfficeVisit,
 }: {
   phone?: string | null;
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
+  onLogCall?: () => void;
+  onOfficeVisit?: () => void;
 }) {
-  if (!phone) return null;
+  if (!phone && !onLogCall && !onOfficeVisit) return null;
   return (
     <span
       className={`inline-flex items-center gap-1 shrink-0 ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
-      <PhoneCallButton phone={phone} size={size} />
-      <WhatsAppButton phone={phone} size={size} />
+      {phone && <PhoneCallButton phone={phone} size={size} />}
+      {phone && <WhatsAppButton phone={phone} size={size} />}
+      {onLogCall && (
+        <button
+          type="button"
+          onClick={onLogCall}
+          className={`bg-accent/10 text-accent hover:bg-accent hover:text-white transition-all duration-150 inline-flex items-center justify-center shrink-0 shadow-xs ${
+            size === "xs" ? "p-0.5 rounded" : size === "sm" ? "p-1 rounded-md" : "p-1.5 rounded-lg"
+          }`}
+          title="Log Call"
+          aria-label="Log Call"
+        >
+          <PhoneCall size={size === "xs" ? 10 : size === "sm" ? 12 : 14} />
+        </button>
+      )}
+      {onOfficeVisit && (
+        <button
+          type="button"
+          onClick={onOfficeVisit}
+          className={`bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white transition-all duration-150 inline-flex items-center justify-center shrink-0 shadow-xs ${
+            size === "xs" ? "p-0.5 rounded" : size === "sm" ? "p-1 rounded-md" : "p-1.5 rounded-lg"
+          }`}
+          title="Record Office Visit"
+          aria-label="Record Office Visit"
+        >
+          <Building2 size={size === "xs" ? 10 : size === "sm" ? 12 : 14} />
+        </button>
+      )}
     </span>
   );
 }

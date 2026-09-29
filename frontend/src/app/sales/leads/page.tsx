@@ -6,9 +6,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2 } from "lucide-react";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
+import {
+  CATEGORY_OPTIONS,
+  STAGES_CALL_PICKED,
+  STAGES_CALL_NOT_PICKED,
+  getStagesForCategory,
+  formatStageLabel,
+  formatCategoryLabel,
+} from "@/lib/leadFunnel";
 
 interface Lead {
   id: string;
@@ -132,6 +140,13 @@ export default function MyLeadsPage() {
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
 
+  // Office Visit Modal State
+  const [activeOfficeVisitLead, setActiveOfficeVisitLead] = useState<Lead | null>(null);
+  const [officeVisitNotes, setOfficeVisitNotes] = useState("");
+  const [officeVisitFollowUpAt, setOfficeVisitFollowUpAt] = useState("");
+  const [officeVisitFollowUpNotes, setOfficeVisitFollowUpNotes] = useState("");
+  const [isSavingVisit, setIsSavingVisit] = useState(false);
+
   // Filters State
   const [categoryFilter, setCategoryFilter] = useState("");
   const [stageFilter, setStageFilter] = useState("");
@@ -179,13 +194,23 @@ export default function MyLeadsPage() {
     isDateFilterActive
   );
 
+  const isCallPicked = (cat?: string | null) => cat === "CALL_PICKED" || cat === "HOT" || cat === "WARM" || !cat;
+  const isCallNotPicked = (cat?: string | null) => cat === "CALL_NOT_PICKED" || cat === "COLD";
+
   // Dynamic filter logic
   const filteredLeads = leads.filter((lead) => {
-    if (categoryFilter && lead.category !== categoryFilter) {
+    if (categoryFilter === "CALL_PICKED" && !isCallPicked(lead.category)) {
       return false;
     }
-    if (stageFilter && lead.funnelStage !== stageFilter) {
+    if (categoryFilter === "CALL_NOT_PICKED" && !isCallNotPicked(lead.category)) {
       return false;
+    }
+    if (stageFilter) {
+      if (stageFilter === "CALLBACK") {
+        if (lead.funnelStage !== "CALLBACK" && lead.funnelStage !== "CALL_NOT_PICKED") return false;
+      } else if (lead.funnelStage !== stageFilter) {
+        return false;
+      }
     }
     if (sourceFilter && sourceFilter !== "ALL") {
       const leadSource = (lead.source || lead.sourceForm || "").toLowerCase();
@@ -275,20 +300,22 @@ export default function MyLeadsPage() {
     l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === yesterdayStr)
   ).length;
 
-  // Dynamic counts for all 8 filters
+  // Dynamic counts for all categories & funnel stages
   const categoryCounts = {
-    HOT: leads.filter((l) => l.category === "HOT").length,
-    WARM: leads.filter((l) => l.category === "WARM").length,
-    COLD: leads.filter((l) => l.category === "COLD").length,
+    CALL_PICKED: leads.filter((l) => isCallPicked(l.category)).length,
+    CALL_NOT_PICKED: leads.filter((l) => isCallNotPicked(l.category)).length,
   };
 
   const stageCounts = {
-    CALL_NOT_PICKED: leads.filter((l) => l.funnelStage === "CALL_NOT_PICKED").length,
+    CALLBACK: leads.filter((l) => l.funnelStage === "CALLBACK" || l.funnelStage === "CALL_NOT_PICKED").length,
+    FOLLOW_UP: leads.filter((l) => l.funnelStage === "FOLLOW_UP").length,
     INTERESTED: leads.filter((l) => l.funnelStage === "INTERESTED").length,
-    OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
-    SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
-    DEAL_CLOSED: leads.filter((l) => l.funnelStage === "DEAL_CLOSED").length,
     NOT_INTERESTED: leads.filter((l) => l.funnelStage === "NOT_INTERESTED").length,
+    DETAILS_SHARED: leads.filter((l) => l.funnelStage === "DETAILS_SHARED").length,
+    SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
+    OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
+    BOOKING_DONE: leads.filter((l) => l.funnelStage === "BOOKING_DONE").length,
+    DEAL_CLOSED: leads.filter((l) => l.funnelStage === "DEAL_CLOSED").length,
   };
 
   // CSV Export
@@ -414,8 +441,26 @@ export default function MyLeadsPage() {
 
   const updateCategory = async (id: string, category: string) => {
     try {
+      const lead = leads.find((l) => l.id === id);
+      let nextStage = lead?.funnelStage;
+      if (category === "CALL_NOT_PICKED") {
+        nextStage = "CALLBACK";
+      } else if (category === "CALL_PICKED" && (!nextStage || nextStage === "CALLBACK" || nextStage === "CALL_NOT_PICKED")) {
+        nextStage = "FOLLOW_UP";
+      }
+
       await api.patch(`/leads/${id}/category`, { category });
-      setLeads(leads.map(l => l.id === id ? { ...l, category } : l));
+      if (nextStage && nextStage !== lead?.funnelStage) {
+        await api.patch(`/leads/${id}/stage`, { stage: nextStage });
+      }
+
+      setLeads(
+        leads.map((l) =>
+          l.id === id
+            ? { ...l, category, ...(nextStage ? { funnelStage: nextStage } : {}) }
+            : l
+        )
+      );
     } catch (err) {
       console.error("Failed to update category", err);
       alert("Failed to update category");
@@ -424,8 +469,26 @@ export default function MyLeadsPage() {
 
   const updateStage = async (id: string, stage: string) => {
     try {
+      const lead = leads.find((l) => l.id === id);
+      let nextCategory = lead?.category;
+      if (stage === "CALLBACK") {
+        nextCategory = "CALL_NOT_PICKED";
+      } else if (stage !== "LOST") {
+        nextCategory = "CALL_PICKED";
+      }
+
       await api.patch(`/leads/${id}/stage`, { stage });
-      setLeads(leads.map(l => l.id === id ? { ...l, funnelStage: stage } : l));
+      if (nextCategory && nextCategory !== lead?.category) {
+        await api.patch(`/leads/${id}/category`, { category: nextCategory });
+      }
+
+      setLeads(
+        leads.map((l) =>
+          l.id === id
+            ? { ...l, funnelStage: stage, ...(nextCategory ? { category: nextCategory } : {}) }
+            : l
+        )
+      );
     } catch (err) {
       console.error("Failed to update stage", err);
       alert("Failed to update funnel stage");
@@ -513,6 +576,65 @@ export default function MyLeadsPage() {
     setActiveCallLead(lead);
   };
 
+  const openOfficeVisitModal = (lead: Lead) => {
+    setActiveOfficeVisitLead(lead);
+    setOfficeVisitNotes("");
+    setOfficeVisitFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    setOfficeVisitFollowUpNotes(lead.followUpNotes || "");
+  };
+
+  const handleSaveOfficeVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOfficeVisitLead) return;
+
+    try {
+      setIsSavingVisit(true);
+      await api.patch(`/leads/${activeOfficeVisitLead.id}/stage`, { stage: "OFFICE_VISIT_DONE" });
+      await api.patch(`/leads/${activeOfficeVisitLead.id}/category`, { category: "CALL_PICKED" });
+
+      const visitNote = officeVisitNotes.trim()
+        ? `[Office Visit] ${officeVisitNotes.trim()}`
+        : "[Office Visit] Client visited office.";
+
+      await api.post("/calls", {
+        leadId: activeOfficeVisitLead.id,
+        notes: visitNote,
+        followUpAt: officeVisitFollowUpAt ? new Date(officeVisitFollowUpAt).toISOString() : null,
+        followUpNotes: officeVisitFollowUpNotes || null,
+      });
+
+      const newCallLogEntry = {
+        id: "temp-" + Date.now(),
+        notes: visitNote,
+        createdAt: new Date().toISOString(),
+      };
+
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === activeOfficeVisitLead.id
+            ? {
+                ...l,
+                category: "CALL_PICKED",
+                funnelStage: "OFFICE_VISIT_DONE",
+                callLogs: [newCallLogEntry, ...(l.callLogs || [])],
+                followUpAt: officeVisitFollowUpAt ? new Date(officeVisitFollowUpAt).toISOString() : l.followUpAt,
+                followUpNotes: officeVisitFollowUpAt ? (officeVisitFollowUpNotes || null) : l.followUpNotes,
+              }
+            : l
+        )
+      );
+
+      alert("Office Visit recorded successfully! Stage updated to Office Visit Done.");
+      setActiveOfficeVisitLead(null);
+      setOfficeVisitNotes("");
+    } catch (err: any) {
+      console.error("Failed to record office visit", err);
+      alert(err?.response?.data?.error || "Failed to record office visit");
+    } finally {
+      setIsSavingVisit(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header with Title and Export Button */}
@@ -594,12 +716,14 @@ export default function MyLeadsPage() {
             <Select
               className="w-full bg-bg h-10 text-sm"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setStageFilter("");
+              }}
             >
               <option value="">Any Category ({leads.length})</option>
-              <option value="HOT">Hot 🔥 ({categoryCounts.HOT})</option>
-              <option value="WARM">Warm 🌤️ ({categoryCounts.WARM})</option>
-              <option value="COLD">Cold ❄️ ({categoryCounts.COLD})</option>
+              <option value="CALL_PICKED">Call Picked 📞 ({categoryCounts.CALL_PICKED})</option>
+              <option value="CALL_NOT_PICKED">Call Not Picked 📵 ({categoryCounts.CALL_NOT_PICKED})</option>
             </Select>
           </div>
 
@@ -614,12 +738,32 @@ export default function MyLeadsPage() {
               onChange={(e) => setStageFilter(e.target.value)}
             >
               <option value="">Any Funnel Stage ({leads.length})</option>
-              <option value="CALL_NOT_PICKED">Call Not Picked ({stageCounts.CALL_NOT_PICKED})</option>
-              <option value="INTERESTED">Interested ({stageCounts.INTERESTED})</option>
-              <option value="OFFICE_VISIT_DONE">Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})</option>
-              <option value="SITE_VISIT_DONE">Site Visit Done ({stageCounts.SITE_VISIT_DONE})</option>
-              <option value="DEAL_CLOSED">Deal Closed ({stageCounts.DEAL_CLOSED})</option>
-              <option value="NOT_INTERESTED">Not Interested ({stageCounts.NOT_INTERESTED})</option>
+              {categoryFilter === "CALL_NOT_PICKED" ? (
+                <option value="CALLBACK">Callback ({stageCounts.CALLBACK})</option>
+              ) : categoryFilter === "CALL_PICKED" ? (
+                <>
+                  <option value="FOLLOW_UP">Follow-up ({stageCounts.FOLLOW_UP})</option>
+                  <option value="INTERESTED">Interested ({stageCounts.INTERESTED})</option>
+                  <option value="DETAILS_SHARED">Details Shared ({stageCounts.DETAILS_SHARED})</option>
+                  <option value="SITE_VISIT_DONE">Site Visit Done ({stageCounts.SITE_VISIT_DONE})</option>
+                  <option value="OFFICE_VISIT_DONE">Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})</option>
+                  <option value="BOOKING_DONE">Booking Done ({stageCounts.BOOKING_DONE})</option>
+                  <option value="DEAL_CLOSED">Deal Closed ({stageCounts.DEAL_CLOSED})</option>
+                  <option value="NOT_INTERESTED">Not Interested ({stageCounts.NOT_INTERESTED})</option>
+                </>
+              ) : (
+                <>
+                  <option value="CALLBACK">Callback ({stageCounts.CALLBACK})</option>
+                  <option value="FOLLOW_UP">Follow-up ({stageCounts.FOLLOW_UP})</option>
+                  <option value="INTERESTED">Interested ({stageCounts.INTERESTED})</option>
+                  <option value="DETAILS_SHARED">Details Shared ({stageCounts.DETAILS_SHARED})</option>
+                  <option value="SITE_VISIT_DONE">Site Visit Done ({stageCounts.SITE_VISIT_DONE})</option>
+                  <option value="OFFICE_VISIT_DONE">Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})</option>
+                  <option value="BOOKING_DONE">Booking Done ({stageCounts.BOOKING_DONE})</option>
+                  <option value="DEAL_CLOSED">Deal Closed ({stageCounts.DEAL_CLOSED})</option>
+                  <option value="NOT_INTERESTED">Not Interested ({stageCounts.NOT_INTERESTED})</option>
+                </>
+              )}
             </Select>
           </div>
 
@@ -813,106 +957,140 @@ export default function MyLeadsPage() {
           <span className="text-border mx-1">|</span>
           <button
             type="button"
-            onClick={() => setCategoryFilter(categoryFilter === "HOT" ? "" : "HOT")}
+            onClick={() => {
+              setCategoryFilter(categoryFilter === "CALL_PICKED" ? "" : "CALL_PICKED");
+              setStageFilter("");
+            }}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-              categoryFilter === "HOT"
-                ? "bg-danger text-white shadow-xs"
-                : "bg-danger/10 text-danger hover:bg-danger/20"
-            }`}
-          >
-            Hot 🔥 ({categoryCounts.HOT})
-          </button>
-          <button
-            type="button"
-            onClick={() => setCategoryFilter(categoryFilter === "WARM" ? "" : "WARM")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-              categoryFilter === "WARM"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-            }`}
-          >
-            Warm 🌤️ ({categoryCounts.WARM})
-          </button>
-          <button
-            type="button"
-            onClick={() => setCategoryFilter(categoryFilter === "COLD" ? "" : "COLD")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-              categoryFilter === "COLD"
-                ? "bg-sky-600 text-white shadow-xs"
-                : "bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20"
-            }`}
-          >
-            Cold ❄️ ({categoryCounts.COLD})
-          </button>
-
-          {/* Funnel Stage Chips */}
-          <span className="text-border mx-1">|</span>
-          <button
-            type="button"
-            onClick={() => setStageFilter(stageFilter === "CALL_NOT_PICKED" ? "" : "CALL_NOT_PICKED")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "CALL_NOT_PICKED"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-            }`}
-          >
-            Call Not Picked ({stageCounts.CALL_NOT_PICKED})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStageFilter(stageFilter === "INTERESTED" ? "" : "INTERESTED")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "INTERESTED"
-                ? "bg-accent text-white shadow-xs"
-                : "bg-accent/10 text-accent hover:bg-accent/20"
-            }`}
-          >
-            Interested ({stageCounts.INTERESTED})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStageFilter(stageFilter === "OFFICE_VISIT_DONE" ? "" : "OFFICE_VISIT_DONE")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "OFFICE_VISIT_DONE"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20"
-            }`}
-          >
-            Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStageFilter(stageFilter === "SITE_VISIT_DONE" ? "" : "SITE_VISIT_DONE")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "SITE_VISIT_DONE"
+              categoryFilter === "CALL_PICKED"
                 ? "bg-emerald-600 text-white shadow-xs"
                 : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
             }`}
           >
-            Site Visit Done ({stageCounts.SITE_VISIT_DONE})
+            Call Picked 📞 ({categoryCounts.CALL_PICKED})
           </button>
           <button
             type="button"
-            onClick={() => setStageFilter(stageFilter === "DEAL_CLOSED" ? "" : "DEAL_CLOSED")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "DEAL_CLOSED"
-                ? "bg-emerald-700 text-white shadow-xs"
-                : "bg-emerald-600/10 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/20"
+            onClick={() => {
+              setCategoryFilter(categoryFilter === "CALL_NOT_PICKED" ? "" : "CALL_NOT_PICKED");
+              setStageFilter("");
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+              categoryFilter === "CALL_NOT_PICKED"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
             }`}
           >
-            Deal Closed ({stageCounts.DEAL_CLOSED})
+            Call Not Picked 📵 ({categoryCounts.CALL_NOT_PICKED})
           </button>
-          <button
-            type="button"
-            onClick={() => setStageFilter(stageFilter === "NOT_INTERESTED" ? "" : "NOT_INTERESTED")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === "NOT_INTERESTED"
-                ? "bg-zinc-600 text-white shadow-xs"
-                : "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-500/20"
-            }`}
-          >
-            Not Interested ({stageCounts.NOT_INTERESTED})
-          </button>
+
+          {/* Funnel Stage Chips */}
+          <span className="text-border mx-1">|</span>
+          {categoryFilter !== "CALL_PICKED" && (
+            <button
+              type="button"
+              onClick={() => setStageFilter(stageFilter === "CALLBACK" ? "" : "CALLBACK")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                stageFilter === "CALLBACK"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+              }`}
+            >
+              Callback ({stageCounts.CALLBACK})
+            </button>
+          )}
+          {categoryFilter !== "CALL_NOT_PICKED" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "FOLLOW_UP" ? "" : "FOLLOW_UP")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "FOLLOW_UP"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20"
+                }`}
+              >
+                Follow-up ({stageCounts.FOLLOW_UP})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "INTERESTED" ? "" : "INTERESTED")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "INTERESTED"
+                    ? "bg-accent text-white shadow-xs"
+                    : "bg-accent/10 text-accent hover:bg-accent/20"
+                }`}
+              >
+                Interested ({stageCounts.INTERESTED})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "DETAILS_SHARED" ? "" : "DETAILS_SHARED")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "DETAILS_SHARED"
+                    ? "bg-teal-600 text-white shadow-xs"
+                    : "bg-teal-500/10 text-teal-700 dark:text-teal-300 hover:bg-teal-500/20"
+                }`}
+              >
+                Details Shared ({stageCounts.DETAILS_SHARED})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "SITE_VISIT_DONE" ? "" : "SITE_VISIT_DONE")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "SITE_VISIT_DONE"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+                }`}
+              >
+                Site Visit Done ({stageCounts.SITE_VISIT_DONE})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "OFFICE_VISIT_DONE" ? "" : "OFFICE_VISIT_DONE")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "OFFICE_VISIT_DONE"
+                    ? "bg-amber-600 text-white shadow-xs"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+                }`}
+              >
+                Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "BOOKING_DONE" ? "" : "BOOKING_DONE")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "BOOKING_DONE"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20"
+                }`}
+              >
+                Booking Done ({stageCounts.BOOKING_DONE})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "DEAL_CLOSED" ? "" : "DEAL_CLOSED")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "DEAL_CLOSED"
+                    ? "bg-emerald-700 text-white shadow-xs"
+                    : "bg-emerald-600/10 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/20"
+                }`}
+              >
+                Deal Closed ({stageCounts.DEAL_CLOSED})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStageFilter(stageFilter === "NOT_INTERESTED" ? "" : "NOT_INTERESTED")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  stageFilter === "NOT_INTERESTED"
+                    ? "bg-zinc-600 text-white shadow-xs"
+                    : "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-500/20"
+                }`}
+              >
+                Not Interested ({stageCounts.NOT_INTERESTED})
+              </button>
+            </>
+          )}
         </div>
 
         {/* Live Filter Summary Bar */}
@@ -1011,7 +1189,12 @@ export default function MyLeadsPage() {
                       </div>
                       <div className="font-mono text-sm text-ink-soft mt-1 flex items-center gap-2">
                         <span>{lead.phone}</span>
-                        <LeadContactButtons phone={lead.phone} size="xs" />
+                        <LeadContactButtons
+                          phone={lead.phone}
+                          size="xs"
+                          onLogCall={() => openCallModal(lead)}
+                          onOfficeVisit={() => openOfficeVisitModal(lead)}
+                        />
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
 
@@ -1113,31 +1296,27 @@ export default function MyLeadsPage() {
                     </td>
                     <td className="p-4 align-top w-1/6">
                       <Select
-                        className="w-full"
-                        value={lead.category || ""}
+                        className="w-full text-xs"
+                        value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
                         onChange={(e) => updateCategory(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
-                        <option value="" disabled>Set Category</option>
-                        <option value="HOT">Hot</option>
-                        <option value="WARM">Warm</option>
-                        <option value="COLD">Cold</option>
+                        <option value="CALL_PICKED">Call Picked 📞</option>
+                        <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
                       </Select>
                     </td>
                     <td className="p-4 align-top w-44">
                       <Select
-                        className="w-full"
-                        value={lead.funnelStage || ""}
+                        className="w-full text-xs"
+                        value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
                         onChange={(e) => updateStage(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
-                        <option value="" disabled>Set Stage</option>
-                        <option value="CALL_NOT_PICKED">Call Not Picked</option>
-                        <option value="INTERESTED">Interested</option>
-                        <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
-                        <option value="SITE_VISIT_DONE">Site Visit Done</option>
-                        <option value="DEAL_CLOSED">Deal Closed</option>
-                        <option value="NOT_INTERESTED">Not Interested</option>
+                        {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                          <option key={st.value} value={st.value}>
+                            {st.label}
+                          </option>
+                        ))}
                       </Select>
                     </td>
                     <td className="p-4 align-top w-36 whitespace-nowrap">
@@ -1178,24 +1357,38 @@ export default function MyLeadsPage() {
                       })()}
                     </td>
                     <td className="p-4 align-top text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1.5 items-center">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => openCallModal(lead)}
                           disabled={lead.status === "LOST"}
+                          className="h-8 text-xs font-medium"
+                          title="Log Call interaction"
                         >
-                          <Phone size={14} className="mr-1.5" />
+                          <Phone size={13} className="mr-1 text-accent" />
                           Log Call
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openOfficeVisitModal(lead)}
+                          disabled={lead.status === "LOST"}
+                          className="h-8 text-xs font-medium border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                          title="Record Office Visit"
+                        >
+                          <Building2 size={13} className="mr-1 text-amber-600 dark:text-amber-400" />
+                          Office Visit
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-danger hover:bg-danger/10 hover:text-danger"
+                          className="h-8 px-2 text-xs text-danger hover:bg-danger/10 hover:text-danger"
                           onClick={() => markLost(lead.id)}
                           disabled={lead.status === "LOST"}
+                          title="Mark Lost"
                         >
-                          <XCircle size={14} className="mr-1.5" />
+                          <XCircle size={13} className="mr-1" />
                           Lost
                         </Button>
                       </div>
@@ -1251,7 +1444,12 @@ export default function MyLeadsPage() {
 
                   {/* Direct Phone & WhatsApp Tap Targets */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <LeadContactButtons phone={lead.phone} size="lg" />
+                    <LeadContactButtons
+                      phone={lead.phone}
+                      size="lg"
+                      onLogCall={() => openCallModal(lead)}
+                      onOfficeVisit={() => openOfficeVisitModal(lead)}
+                    />
                   </div>
                 </div>
 
@@ -1361,31 +1559,27 @@ export default function MyLeadsPage() {
                     <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Category</label>
                     <Select
                       className="w-full text-xs h-9 bg-bg"
-                      value={lead.category || ""}
+                      value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
                       onChange={(e) => updateCategory(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
-                      <option value="" disabled>Category</option>
-                      <option value="HOT">Hot 🔥</option>
-                      <option value="WARM">Warm 🌤️</option>
-                      <option value="COLD">Cold ❄️</option>
+                      <option value="CALL_PICKED">Call Picked 📞</option>
+                      <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
                     </Select>
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Stage</label>
                     <Select
                       className="w-full text-xs h-9 bg-bg"
-                      value={lead.funnelStage || ""}
+                      value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
                       onChange={(e) => updateStage(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
-                      <option value="" disabled>Stage</option>
-                      <option value="CALL_NOT_PICKED">Call Not Picked</option>
-                      <option value="INTERESTED">Interested</option>
-                      <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
-                      <option value="SITE_VISIT_DONE">Site Visit Done</option>
-                      <option value="DEAL_CLOSED">Deal Closed</option>
-                      <option value="NOT_INTERESTED">Not Interested</option>
+                      {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                        <option key={st.value} value={st.value}>
+                          {st.label}
+                        </option>
+                      ))}
                     </Select>
                   </div>
                 </div>
@@ -1422,13 +1616,23 @@ export default function MyLeadsPage() {
                     onClick={() => openCallModal(lead)}
                     disabled={lead.status === "LOST"}
                   >
-                    <Phone size={14} className="mr-1.5 text-accent" />
+                    <Phone size={14} className="mr-1 text-accent" />
                     Log Call
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 justify-center py-2 h-9 text-xs font-semibold border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                    onClick={() => openOfficeVisitModal(lead)}
+                    disabled={lead.status === "LOST"}
+                  >
+                    <Building2 size={14} className="mr-1 text-amber-600 dark:text-amber-400" />
+                    Office Visit
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 px-3 text-xs text-danger hover:bg-danger/10 hover:text-danger"
+                    className="h-9 px-2.5 text-xs text-danger hover:bg-danger/10 hover:text-danger"
                     onClick={() => markLost(lead.id)}
                     disabled={lead.status === "LOST"}
                   >
@@ -1548,6 +1752,112 @@ export default function MyLeadsPage() {
               <div className="flex justify-end gap-2 sm:gap-3 pt-3 border-t border-border">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setActiveCallLead(null)} className="h-10 px-4">Cancel</Button>
                 <Button type="submit" size="sm" className="h-10 px-4 font-semibold">Save Call Record</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Office Visit Modal */}
+      {activeOfficeVisitLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-ink/40 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-surface border border-border rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-xl my-8">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-ink">Record Office Visit</h3>
+                  <p className="text-xs text-ink-soft">
+                    Client visit for <strong className="text-ink">{activeOfficeVisitLead.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveOfficeVisitLead(null)}
+                className="p-1 rounded-lg text-ink-soft hover:text-ink hover:bg-bg transition-colors"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Lead Brief Box */}
+            <div className="my-3 p-2.5 rounded-lg bg-bg border border-border flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-ink-soft">{activeOfficeVisitLead.phone}</span>
+                <LeadContactButtons phone={activeOfficeVisitLead.phone} size="xs" />
+              </div>
+              <SourceBadge source={activeOfficeVisitLead.source || activeOfficeVisitLead.sourceForm} />
+            </div>
+
+            <form onSubmit={handleSaveOfficeVisit} className="space-y-3 sm:space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-soft mb-1 uppercase tracking-wider">
+                  Office Visit Notes & Discussions
+                </label>
+                <textarea
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  rows={3}
+                  value={officeVisitNotes}
+                  onChange={(e) => setOfficeVisitNotes(e.target.value)}
+                  placeholder="e.g. Client came to the office, reviewed site layouts for Sahastradhara project, offered brochure..."
+                />
+              </div>
+
+              {/* Follow-up Section */}
+              <div className="border-t border-border pt-3 space-y-2.5">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink">
+                  <Calendar size={14} className="text-amber-600 dark:text-amber-400" />
+                  <span>Next Follow-Up Reminder (Optional)</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    Follow-Up Date & Time
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    min={new Date().toISOString().slice(0, 16)}
+                    value={officeVisitFollowUpAt}
+                    onChange={(e) => setOfficeVisitFollowUpAt(e.target.value)}
+                    className="h-10 text-xs sm:text-sm bg-bg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    Follow-Up Notes
+                  </label>
+                  <textarea
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    rows={2}
+                    value={officeVisitFollowUpNotes}
+                    onChange={(e) => setOfficeVisitFollowUpNotes(e.target.value)}
+                    placeholder="e.g. Follow up on payment token, send floor plan PDF on WhatsApp..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveOfficeVisitLead(null)}
+                  className="h-10 px-4"
+                  disabled={isSavingVisit}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSavingVisit}
+                  className="h-10 px-4 font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {isSavingVisit ? "Saving Visit..." : "Save Office Visit & Update Stage"}
+                </Button>
               </div>
             </form>
           </div>

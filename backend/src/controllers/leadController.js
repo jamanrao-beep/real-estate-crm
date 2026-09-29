@@ -298,15 +298,16 @@ async function markLeadLost(req, res) {
   }
 }
 
-// PATCH /api/leads/:id/category   body: { category: "HOT" | "WARM" | "COLD" }
-// PRD 5.2 — Sales Person marks a lead Hot/Warm/Cold. Admin can override too.
+// PATCH /api/leads/:id/category   body: { category: "CALL_PICKED" | "CALL_NOT_PICKED" | "HOT" | "WARM" | "COLD" }
+// PRD 5.2 — Sales Person marks a lead Call Picked / Call Not Picked.
 async function categorizeLead(req, res) {
   try {
     const { id } = req.params;
     const { category } = req.body;
 
-    if (!["HOT", "WARM", "COLD"].includes(category)) {
-      return res.status(400).json({ error: "category must be HOT, WARM, or COLD" });
+    const ALLOWED_CATEGORIES = ["CALL_PICKED", "CALL_NOT_PICKED", "HOT", "WARM", "COLD"];
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: "category must be CALL_PICKED or CALL_NOT_PICKED" });
     }
 
     const lead = await prisma.lead.findUnique({ where: { id } });
@@ -321,10 +322,36 @@ async function categorizeLead(req, res) {
       return res.status(403).json({ error: "You can only update leads you referred" });
     }
 
-    const updatedLead = await prisma.lead.update({
-      where: { id },
-      data: { category },
-    });
+    // Category rule:
+    // If CALL_NOT_PICKED -> Stage must be CALLBACK
+    // If CALL_PICKED and previous stage was CALLBACK/CALL_NOT_PICKED -> switch to FOLLOW_UP
+    let newStage = undefined;
+    if (category === "CALL_NOT_PICKED") {
+      newStage = "CALLBACK";
+    } else if (category === "CALL_PICKED" && (lead.funnelStage === "CALLBACK" || lead.funnelStage === "CALL_NOT_PICKED")) {
+      newStage = "FOLLOW_UP";
+    }
+
+    const updateData = { category };
+    if (newStage) {
+      updateData.funnelStage = newStage;
+    }
+
+    const [updatedLead] = await prisma.$transaction([
+      prisma.lead.update({
+        where: { id },
+        data: updateData,
+      }),
+      ...(newStage && newStage !== lead.funnelStage ? [
+        prisma.leadStatusHistory.create({
+          data: {
+            leadId: id,
+            stage: newStage,
+            changedById: req.user.userId,
+          },
+        }),
+      ] : []),
+    ]);
 
     return res.json(updatedLead);
   } catch (err) {
@@ -333,17 +360,29 @@ async function categorizeLead(req, res) {
   }
 }
 
-// PATCH /api/leads/:id/stage   body: { stage: "INTERESTED" | "SITE_VISIT_DONE" | "DEAL_CLOSED" }
+// PATCH /api/leads/:id/stage   body: { stage: string }
 // PRD 5.3 — moves a lead through the funnel. Manual, sales-person driven.
-// (Marking LOST has its own dedicated endpoint — /:id/lost — since that's
-// a distinct action with its own PRD wording, not part of forward progression.)
 async function updateFunnelStage(req, res) {
   try {
     const { id } = req.params;
     const { stage } = req.body;
 
-    if (!["CALL_NOT_PICKED", "INTERESTED", "OFFICE_VISIT_DONE", "SITE_VISIT_DONE", "DEAL_CLOSED", "NOT_INTERESTED"].includes(stage)) {
-      return res.status(400).json({ error: "stage must be CALL_NOT_PICKED, INTERESTED, OFFICE_VISIT_DONE, SITE_VISIT_DONE, DEAL_CLOSED, or NOT_INTERESTED" });
+    const ALLOWED_STAGES = [
+      "CALLBACK",
+      "FOLLOW_UP",
+      "INTERESTED",
+      "NOT_INTERESTED",
+      "DETAILS_SHARED",
+      "SITE_VISIT_DONE",
+      "OFFICE_VISIT_DONE",
+      "BOOKING_DONE",
+      "DEAL_CLOSED",
+      "CALL_NOT_PICKED",
+      "LOST",
+    ];
+
+    if (!ALLOWED_STAGES.includes(stage)) {
+      return res.status(400).json({ error: `Invalid stage: ${stage}` });
     }
 
     const lead = await prisma.lead.findUnique({ where: { id } });
@@ -363,10 +402,25 @@ async function updateFunnelStage(req, res) {
       return res.json(lead);
     }
 
+    // Enforce Category & Stage relationship:
+    // If stage is CALLBACK -> category is CALL_NOT_PICKED
+    // If stage is a Call Picked stage -> category is CALL_PICKED
+    let newCategory = lead.category;
+    if (stage === "CALLBACK") {
+      newCategory = "CALL_NOT_PICKED";
+    } else if (["FOLLOW_UP", "INTERESTED", "NOT_INTERESTED", "DETAILS_SHARED", "SITE_VISIT_DONE", "OFFICE_VISIT_DONE", "BOOKING_DONE", "DEAL_CLOSED"].includes(stage)) {
+      newCategory = "CALL_PICKED";
+    }
+
+    const updateData = { funnelStage: stage };
+    if (newCategory && newCategory !== lead.category) {
+      updateData.category = newCategory;
+    }
+
     const [updatedLead] = await prisma.$transaction([
       prisma.lead.update({
         where: { id },
-        data: { funnelStage: stage },
+        data: updateData,
       }),
       prisma.leadStatusHistory.create({
         data: {

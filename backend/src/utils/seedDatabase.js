@@ -39,6 +39,26 @@ async function seedDatabase() {
         console.log(`[Seed] Updated default user: ${u.email}`);
       }
     }
+    // Ensure MySQL enum columns support all required CRM Lead Funnel values
+    try {
+      console.log("[Migration] Ensuring MySQL enum columns include new lead funnel values...");
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE \`Lead\` 
+        MODIFY COLUMN \`category\` ENUM('CALL_PICKED', 'CALL_NOT_PICKED', 'HOT', 'WARM', 'COLD') NOT NULL DEFAULT 'CALL_PICKED'
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE \`Lead\` 
+        MODIFY COLUMN \`funnelStage\` ENUM('CALLBACK', 'FOLLOW_UP', 'INTERESTED', 'NOT_INTERESTED', 'DETAILS_SHARED', 'SITE_VISIT_DONE', 'OFFICE_VISIT_DONE', 'BOOKING_DONE', 'DEAL_CLOSED', 'CALL_NOT_PICKED', 'LOST') NOT NULL DEFAULT 'FOLLOW_UP'
+      `);
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE \`LeadStatusHistory\` 
+        MODIFY COLUMN \`stage\` ENUM('CALLBACK', 'FOLLOW_UP', 'INTERESTED', 'NOT_INTERESTED', 'DETAILS_SHARED', 'SITE_VISIT_DONE', 'OFFICE_VISIT_DONE', 'BOOKING_DONE', 'DEAL_CLOSED', 'CALL_NOT_PICKED', 'LOST') NOT NULL
+      `);
+      console.log("[Migration] MySQL enum columns verified successfully.");
+    } catch (migErr) {
+      console.error("[Migration] Notice updating enum columns:", migErr.message);
+    }
+
     console.log("[Seed] All default users verified/seeded successfully.");
     return { success: true, count: defaultUsers.length };
   } catch (err) {

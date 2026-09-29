@@ -10,6 +10,7 @@ import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
+import { formatCategoryLabel, formatStageLabel } from "@/lib/leadFunnel";
 
 interface Lead {
   id: string;
@@ -353,11 +354,17 @@ export default function AllLeadsPage() {
             <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
               Category
             </label>
-            <Select className="w-full bg-bg h-10 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <Select 
+              className="w-full bg-bg h-10 text-sm" 
+              value={category} 
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setFunnelStage("");
+              }}
+            >
               <option value="">Any Category</option>
-              <option value="HOT">Hot 🔥</option>
-              <option value="WARM">Warm 🌤️</option>
-              <option value="COLD">Cold ❄️</option>
+              <option value="CALL_PICKED">Call Picked 📞</option>
+              <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
             </Select>
           </div>
           <div>
@@ -370,13 +377,32 @@ export default function AllLeadsPage() {
               onChange={(e) => setFunnelStage(e.target.value)}
             >
               <option value="">Any Stage</option>
-              <option value="CALL_NOT_PICKED">Call Not Picked</option>
-              <option value="INTERESTED">Interested</option>
-              <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
-              <option value="SITE_VISIT_DONE">Site Visit Done</option>
-              <option value="DEAL_CLOSED">Deal Closed</option>
-              <option value="NOT_INTERESTED">Not Interested</option>
-              <option value="LOST">Lost</option>
+              {category === "CALL_NOT_PICKED" ? (
+                <option value="CALLBACK">Callback</option>
+              ) : category === "CALL_PICKED" ? (
+                <>
+                  <option value="FOLLOW_UP">Follow-up</option>
+                  <option value="INTERESTED">Interested</option>
+                  <option value="DETAILS_SHARED">Details Shared</option>
+                  <option value="SITE_VISIT_DONE">Site Visit Done</option>
+                  <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
+                  <option value="BOOKING_DONE">Booking Done</option>
+                  <option value="DEAL_CLOSED">Deal Closed</option>
+                  <option value="NOT_INTERESTED">Not Interested</option>
+                </>
+              ) : (
+                <>
+                  <option value="CALLBACK">Callback</option>
+                  <option value="FOLLOW_UP">Follow-up</option>
+                  <option value="INTERESTED">Interested</option>
+                  <option value="DETAILS_SHARED">Details Shared</option>
+                  <option value="SITE_VISIT_DONE">Site Visit Done</option>
+                  <option value="OFFICE_VISIT_DONE">Office Visit Done</option>
+                  <option value="BOOKING_DONE">Booking Done</option>
+                  <option value="DEAL_CLOSED">Deal Closed</option>
+                  <option value="NOT_INTERESTED">Not Interested</option>
+                </>
+              )}
             </Select>
           </div>
           <div>
@@ -598,21 +624,19 @@ export default function AllLeadsPage() {
                         {lead.category ? (
                           <Badge
                             variant={
-                              lead.category === "HOT"
-                                ? "danger"
-                                : lead.category === "WARM"
-                                ? "warning"
-                                : "default"
+                              lead.category === "CALL_PICKED" || lead.category === "HOT"
+                                ? "success"
+                                : "warning"
                             }
                           >
-                            {lead.category}
+                            {formatCategoryLabel(lead.category)}
                           </Badge>
                         ) : (
                           <span className="text-xs text-ink-soft">—</span>
                         )}
                         {lead.funnelStage ? (
                           <Badge variant="outline" className="font-mono text-[10px]">
-                            {lead.funnelStage.replace(/_/g, " ")}
+                            {formatStageLabel(lead.funnelStage)}
                           </Badge>
                         ) : null}
                       </div>

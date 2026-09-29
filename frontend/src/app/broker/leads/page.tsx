@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Search, XCircle, Plus } from "lucide-react";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
+import { getStagesForCategory } from "@/lib/leadFunnel";
 
 interface Lead {
   id: string;
@@ -46,10 +47,30 @@ export default function MyLeadsPage() {
     fetchLeads();
   }, [fetchLeads]);
 
+  const isCallNotPicked = (cat?: string | null) => cat === "CALL_NOT_PICKED" || cat === "COLD";
+
   const updateCategory = async (id: string, category: string) => {
     try {
+      const lead = leads.find((l) => l.id === id);
+      let nextStage = lead?.funnelStage;
+      if (category === "CALL_NOT_PICKED") {
+        nextStage = "CALLBACK";
+      } else if (category === "CALL_PICKED" && (!nextStage || nextStage === "CALLBACK" || nextStage === "CALL_NOT_PICKED")) {
+        nextStage = "FOLLOW_UP";
+      }
+
       await api.patch(`/leads/${id}/category`, { category });
-      setLeads(leads.map(l => l.id === id ? { ...l, category } : l));
+      if (nextStage && nextStage !== lead?.funnelStage) {
+        await api.patch(`/leads/${id}/stage`, { stage: nextStage });
+      }
+
+      setLeads(
+        leads.map((l) =>
+          l.id === id
+            ? { ...l, category, ...(nextStage ? { funnelStage: nextStage } : {}) }
+            : l
+        )
+      );
     } catch (err) {
       console.error("Failed to update category", err);
       alert("Failed to update category");
@@ -58,8 +79,26 @@ export default function MyLeadsPage() {
 
   const updateStage = async (id: string, stage: string) => {
     try {
+      const lead = leads.find((l) => l.id === id);
+      let nextCategory = lead?.category;
+      if (stage === "CALLBACK") {
+        nextCategory = "CALL_NOT_PICKED";
+      } else if (stage !== "LOST") {
+        nextCategory = "CALL_PICKED";
+      }
+
       await api.patch(`/leads/${id}/stage`, { stage });
-      setLeads(leads.map(l => l.id === id ? { ...l, funnelStage: stage } : l));
+      if (nextCategory && nextCategory !== lead?.category) {
+        await api.patch(`/leads/${id}/category`, { category: nextCategory });
+      }
+
+      setLeads(
+        leads.map((l) =>
+          l.id === id
+            ? { ...l, funnelStage: stage, ...(nextCategory ? { category: nextCategory } : {}) }
+            : l
+        )
+      );
     } catch (err) {
       console.error("Failed to update stage", err);
       alert("Failed to update funnel stage");
@@ -166,29 +205,27 @@ export default function MyLeadsPage() {
                     </td>
                     <td className="p-4 align-top w-1/5">
                       <Select
-                        className="w-full"
-                        value={lead.category || ""}
+                        className="w-full text-xs"
+                        value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
                         onChange={(e) => updateCategory(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
-                        <option value="" disabled>Set Category</option>
-                        <option value="HOT">Hot</option>
-                        <option value="WARM">Warm</option>
-                        <option value="COLD">Cold</option>
+                        <option value="CALL_PICKED">Call Picked 📞</option>
+                        <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
                       </Select>
                     </td>
                     <td className="p-4 align-top w-1/4">
                       <Select
-                        className="w-full"
-                        value={lead.funnelStage || ""}
+                        className="w-full text-xs"
+                        value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
                         onChange={(e) => updateStage(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
-                        <option value="" disabled>Set Stage</option>
-                        <option value="CALL_NOT_PICKED">Call Not Picked</option>
-                        <option value="INTERESTED">Interested</option>
-                        <option value="SITE_VISIT_DONE">Site Visit Done</option>
-                        <option value="DEAL_CLOSED">Deal Closed</option>
+                        {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                          <option key={st.value} value={st.value}>
+                            {st.label}
+                          </option>
+                        ))}
                       </Select>
                     </td>
                     <td className="p-4 align-top text-right">
@@ -253,29 +290,27 @@ export default function MyLeadsPage() {
                     <label className="text-[10px] uppercase tracking-wider font-semibold text-ink-soft mb-1 block">Category</label>
                     <Select
                       className="w-full text-xs h-9"
-                      value={lead.category || ""}
+                      value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
                       onChange={(e) => updateCategory(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
-                      <option value="" disabled>Set Category</option>
-                      <option value="HOT">Hot</option>
-                      <option value="WARM">Warm</option>
-                      <option value="COLD">Cold</option>
+                      <option value="CALL_PICKED">Call Picked 📞</option>
+                      <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
                     </Select>
                   </div>
                   <div>
                     <label className="text-[10px] uppercase tracking-wider font-semibold text-ink-soft mb-1 block">Stage</label>
                     <Select
                       className="w-full text-xs h-9"
-                      value={lead.funnelStage || ""}
+                      value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
                       onChange={(e) => updateStage(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
-                      <option value="" disabled>Set Stage</option>
-                      <option value="CALL_NOT_PICKED">Call Not Picked</option>
-                      <option value="INTERESTED">Interested</option>
-                      <option value="SITE_VISIT_DONE">Site Visit Done</option>
-                      <option value="DEAL_CLOSED">Deal Closed</option>
+                      {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                        <option key={st.value} value={st.value}>
+                          {st.label}
+                        </option>
+                      ))}
                     </Select>
                   </div>
                 </div>
