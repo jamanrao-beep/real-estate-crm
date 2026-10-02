@@ -269,18 +269,16 @@ async function markLeadLost(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    // Ownership check
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads assigned to you" });
-    }
-    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads you referred" });
-    }
+    const updateData = {
+      status: "LOST",
+      funnelStage: "LOST",
+      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
+    };
 
     const [updatedLead] = await prisma.$transaction([
       prisma.lead.update({
         where: { id },
-        data: { status: "LOST", funnelStage: "LOST" },
+        data: updateData,
       }),
       prisma.leadStatusHistory.create({
         data: {
@@ -315,13 +313,6 @@ async function categorizeLead(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads assigned to you" });
-    }
-    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads you referred" });
-    }
-
     // Category rule:
     // If CALL_NOT_PICKED -> Stage must be CALLBACK
     // If CALL_PICKED and previous stage was CALLBACK/CALL_NOT_PICKED -> switch to FOLLOW_UP
@@ -332,7 +323,10 @@ async function categorizeLead(req, res) {
       newStage = "FOLLOW_UP";
     }
 
-    const updateData = { category };
+    const updateData = {
+      category,
+      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
+    };
     if (newStage) {
       updateData.funnelStage = newStage;
     }
@@ -390,13 +384,6 @@ async function updateFunnelStage(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads assigned to you" });
-    }
-    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads you referred" });
-    }
-
     // Strictly prevent duplicate conversion / status events if already at this stage
     if (lead.funnelStage === stage) {
       return res.json(lead);
@@ -412,7 +399,10 @@ async function updateFunnelStage(req, res) {
       newCategory = "CALL_PICKED";
     }
 
-    const updateData = { funnelStage: stage };
+    const updateData = {
+      funnelStage: stage,
+      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
+    };
     if (newCategory && newCategory !== lead.category) {
       updateData.category = newCategory;
     }
@@ -491,16 +481,12 @@ async function scheduleFollowUp(req, res) {
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-    // Ownership check
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only update leads assigned to you" });
-    }
-    
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
         followUpAt: followUpAt ? new Date(followUpAt) : null,
         followUpNotes: followUpAt ? (followUpNotes ? followUpNotes.trim() : null) : null,
+        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
       },
     });
 
@@ -808,6 +794,189 @@ async function createLead(req, res) {
   }
 }
 
+// POST /api/leads/:id/notes   body: { note: string }
+async function addLeadNote(req, res) {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+
+    if (!note || !note.trim()) {
+      return res.status(400).json({ error: "Note cannot be empty" });
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    const cleanNote = note.trim();
+
+    // Create CallLog record for note audit/history
+    const callLog = await prisma.callLog.create({
+      data: {
+        leadId: id,
+        salesPersonId: req.user.userId,
+        startTime: new Date(),
+        endTime: new Date(),
+        durationSecs: 0,
+        notes: cleanNote,
+      },
+    });
+
+    // Update lead's formAnswers.callNotes and auto-assign if unassigned
+    const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
+    currentFormAnswers.callNotes = cleanNote;
+
+    const updatedLead = await prisma.lead.update({
+      where: { id },
+      data: {
+        formAnswers: currentFormAnswers,
+        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true },
+        },
+      },
+    });
+
+    return res.status(201).json({ success: true, callLog, lead: updatedLead });
+  } catch (err) {
+    console.error("Failed to add note:", err);
+    return res.status(500).json({ error: "Failed to add note" });
+  }
+}
+
+// PATCH /api/leads/:id/notes   body: { noteId?: string, oldNote?: string, newNote: string }
+async function updateLeadNote(req, res) {
+  try {
+    const { id } = req.params;
+    const { noteId, oldNote, newNote } = req.body;
+
+    if (!newNote || !newNote.trim()) {
+      return res.status(400).json({ error: "New note cannot be empty" });
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      include: {
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+    if (!lead) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    const cleanNewNote = newNote.trim();
+    let callLogUpdated = null;
+
+    // 1. If noteId is provided and not a temp id or formAnswers
+    if (noteId && !noteId.startsWith("temp-") && noteId !== "formAnswers") {
+      const existingCallLog = lead.callLogs.find((cl) => cl.id === noteId);
+      if (existingCallLog) {
+        callLogUpdated = await prisma.callLog.update({
+          where: { id: noteId },
+          data: { notes: cleanNewNote },
+        });
+      }
+    }
+
+    // 2. If no callLogUpdated yet, but oldNote is provided, find call log with matching text
+    if (!callLogUpdated && oldNote) {
+      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === oldNote.trim());
+      if (match) {
+        callLogUpdated = await prisma.callLog.update({
+          where: { id: match.id },
+          data: { notes: cleanNewNote },
+        });
+      }
+    }
+
+    // 3. Update lead formAnswers.callNotes if it was matching oldNote or is the latest note
+    const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
+    if (
+      !oldNote ||
+      (currentFormAnswers.callNotes && currentFormAnswers.callNotes.trim() === (oldNote || "").trim()) ||
+      noteId === "formAnswers" ||
+      !lead.callLogs.length ||
+      (callLogUpdated && lead.callLogs[0]?.id === callLogUpdated.id)
+    ) {
+      currentFormAnswers.callNotes = cleanNewNote;
+    }
+
+    const updatedLead = await prisma.lead.update({
+      where: { id },
+      data: {
+        formAnswers: currentFormAnswers,
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true },
+        },
+      },
+    });
+
+    return res.json({ success: true, lead: updatedLead, callLog: callLogUpdated });
+  } catch (err) {
+    console.error("Failed to update note:", err);
+    return res.status(500).json({ error: "Failed to update note" });
+  }
+}
+
+// DELETE /api/leads/:id/notes   body: { noteId?: string, note?: string }
+async function deleteLeadNote(req, res) {
+  try {
+    const { id } = req.params;
+    const { noteId, note } = req.body;
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      include: { callLogs: true },
+    });
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    if (noteId && !noteId.startsWith("temp-") && noteId !== "formAnswers") {
+      await prisma.callLog.deleteMany({ where: { id: noteId, leadId: id } });
+    } else if (note) {
+      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === note.trim());
+      if (match) {
+        await prisma.callLog.delete({ where: { id: match.id } });
+      }
+    }
+
+    const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
+    if (currentFormAnswers.callNotes && (!note || currentFormAnswers.callNotes.trim() === note.trim())) {
+      delete currentFormAnswers.callNotes;
+      await prisma.lead.update({
+        where: { id },
+        data: { formAnswers: currentFormAnswers },
+      });
+    }
+
+    const updatedLead = await prisma.lead.findUnique({
+      where: { id },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true },
+        },
+      },
+    });
+
+    return res.json({ success: true, lead: updatedLead });
+  } catch (err) {
+    console.error("Failed to delete note:", err);
+    return res.status(500).json({ error: "Failed to delete note" });
+  }
+}
+
 module.exports = {
   createLead,
   getUnassignedLeads,
@@ -824,4 +993,8 @@ module.exports = {
   receiveWebhookLead,
   importBulkLeads,
   sendWhatsAppToLead,
+  addLeadNote,
+  updateLeadNote,
+  deleteLeadNote,
 };
+

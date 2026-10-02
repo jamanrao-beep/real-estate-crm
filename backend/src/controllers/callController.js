@@ -17,11 +17,6 @@ async function logCall(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    // A sales person can only log calls against their own leads.
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "You can only log calls for leads assigned to you" });
-    }
-
     const start = startTime ? new Date(startTime) : new Date();
     const end = endTime ? new Date(endTime) : new Date();
     const durationSecs = Math.max(0, Math.round((end - start) / 1000));
@@ -32,7 +27,7 @@ async function logCall(req, res) {
     const callLog = await prisma.callLog.create({
       data: {
         leadId,
-        salesPersonId: lead.assignedToId || req.user.userId,
+        salesPersonId: req.user.userId,
         startTime: start,
         endTime: end,
         durationSecs,
@@ -55,6 +50,7 @@ async function logCall(req, res) {
       where: { id: leadId },
       data: {
         formAnswers: currentFormAnswers,
+        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
         ...(followUpDate && {
           followUpAt: followUpDate,
           followUpNotes: cleanFollowUpNotes,

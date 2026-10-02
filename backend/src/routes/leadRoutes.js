@@ -16,6 +16,9 @@ const {
   receiveWebhookLead,
   importBulkLeads,
   sendWhatsAppToLead,
+  addLeadNote,
+  updateLeadNote,
+  deleteLeadNote,
 } = require("../controllers/leadController");
 const { requireAuth, adminOnly, salesOnly } = require("../middleware/auth");
 
@@ -39,13 +42,17 @@ router.post("/auto-assign", requireAuth, adminOnly, autoAssignLeads);
 // Sales Person endpoint
 router.get("/mine", requireAuth, salesOnly, getMyLeads);
 
-// Shared endpoints — Sales Person (own leads only) or Admin (any lead).
-// Ownership is checked inside each controller, not via role middleware.
+// Shared endpoints — Sales Person or Admin.
 router.patch("/:id/lost", requireAuth, markLeadLost);
 router.patch("/:id/category", requireAuth, categorizeLead);
 router.patch("/:id/stage", requireAuth, updateFunnelStage);
 router.patch("/:id/ai-chat", logAiChatMessage); // AI service can call this without auth for now or with a separate API key
 router.patch("/:id/follow-up", requireAuth, scheduleFollowUp);
+
+// Note management endpoints
+router.post("/:id/notes", requireAuth, addLeadNote);
+router.patch("/:id/notes", requireAuth, updateLeadNote);
+router.delete("/:id/notes", requireAuth, deleteLeadNote);
 
 module.exports = router;
 
