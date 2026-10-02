@@ -10,6 +10,7 @@ import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
+import { LeadNotesBox } from "@/components/LeadNotesBox";
 import { formatCategoryLabel, formatStageLabel } from "@/lib/leadFunnel";
 
 interface Lead {
@@ -557,37 +558,15 @@ export default function AllLeadsPage() {
                         </div>
                       )}
 
-                      {/* Call Notes Box (Sky Blue) */}
-                      {(() => {
-                        const callNotesList = getLeadCallNotes(lead);
-                        if (callNotesList.length === 0) return null;
-                        return (
-                          <div className="mt-2 p-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200 text-xs flex flex-col gap-1 transition-all">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="flex items-center gap-1.5 font-semibold text-sky-800 dark:text-sky-300">
-                                <MessageSquare size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                                <span>Note{callNotesList.length > 1 ? `s (${callNotesList.length})` : ""}</span>
-                              </span>
-                              {callNotesList[0].date && (
-                                <span className="text-[10px] text-sky-800/70 dark:text-sky-300/70 font-normal">{callNotesList[0].date}</span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-ink/85 italic break-words">
-                              &ldquo;{callNotesList[0].note}&rdquo;
-                            </div>
-                            {callNotesList.length > 1 && (
-                              <div className="mt-1 pt-1 border-t border-sky-500/20 space-y-1">
-                                {callNotesList.slice(1).map((cn, idx) => (
-                                  <div key={idx} className="text-[10px] text-ink/75 flex items-start justify-between gap-1">
-                                    <span className="italic break-words">• &ldquo;{cn.note}&rdquo;</span>
-                                    {cn.date && <span className="shrink-0 text-[9px] opacity-75">{cn.date}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      {/* Call Notes Box with Add & Edit */}
+                      <LeadNotesBox
+                        lead={lead}
+                        onLeadUpdated={(updatedLead) => {
+                          setLeads((prev) =>
+                            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+                          );
+                        }}
+                      />
                     </td>
                     <td className="p-4 align-top">
                       <div>
@@ -795,37 +774,15 @@ export default function AllLeadsPage() {
                 </div>
               )}
 
-              {/* Call Notes Box for Mobile (Sky Blue) */}
-              {(() => {
-                const callNotesList = getLeadCallNotes(lead);
-                if (callNotesList.length === 0) return null;
-                return (
-                  <div className="p-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-950 dark:text-sky-200 text-xs flex flex-col gap-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="flex items-center gap-1.5 font-semibold text-sky-800 dark:text-sky-300">
-                        <MessageSquare size={12} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                        <span>Note{callNotesList.length > 1 ? `s (${callNotesList.length})` : ""}</span>
-                      </span>
-                      {callNotesList[0].date && (
-                        <span className="text-[10px] text-sky-800/70 dark:text-sky-300/70 font-normal">{callNotesList[0].date}</span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-ink/85 italic break-words">
-                      &ldquo;{callNotesList[0].note}&rdquo;
-                    </div>
-                    {callNotesList.length > 1 && (
-                      <div className="mt-1 pt-1 border-t border-sky-500/20 space-y-1">
-                        {callNotesList.slice(1).map((cn, idx) => (
-                          <div key={idx} className="text-[10px] text-ink/75 flex items-start justify-between gap-1">
-                            <span className="italic break-words">• &ldquo;{cn.note}&rdquo;</span>
-                            {cn.date && <span className="shrink-0 text-[9px] opacity-75">{cn.date}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Call Notes Box for Mobile with Add & Edit */}
+              <LeadNotesBox
+                lead={lead}
+                onLeadUpdated={(updatedLead) => {
+                  setLeads((prev) =>
+                    prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+                  );
+                }}
+              />
             </div>
           ))
         )}
