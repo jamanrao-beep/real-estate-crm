@@ -55,6 +55,10 @@ async function getAllLeads(req, res) {
           orderBy: { createdAt: "desc" },
           select: { id: true, notes: true, createdAt: true },
         },
+        statusHistory: {
+          orderBy: { changedAt: "desc" },
+          select: { id: true, stage: true, changedAt: true },
+        },
       },
       orderBy: { dateReceived: "desc" },
     });
@@ -104,6 +108,15 @@ async function getMyLeads(req, res) {
         callLogs: {
           orderBy: { createdAt: "desc" },
           select: { id: true, notes: true, createdAt: true },
+        },
+        statusHistory: {
+          orderBy: { changedAt: "desc" },
+          select: { id: true, stage: true, changedAt: true },
+        },
+        assignmentHistory: {
+          where: { assignedToId: req.user.userId },
+          orderBy: { assignedAt: "desc" },
+          select: { assignedAt: true },
         },
       },
       orderBy: { dateReceived: "desc" },
@@ -255,6 +268,25 @@ async function autoAssignLeads(req, res) {
   }
 }
 
+// Helper to enforce strict lead access control:
+// Only Admin and the assigned Sales Person (or referring Broker) can view/modify
+function checkLeadAccess(req, lead) {
+  if (req.user.role === "ADMIN") return { allowed: true };
+  if (req.user.role === "SALES_PERSON") {
+    if (lead.assignedToId && lead.assignedToId === req.user.userId) {
+      return { allowed: true };
+    }
+    return { allowed: false, message: "Access denied: This lead is not assigned to you" };
+  }
+  if (req.user.role === "BROKER") {
+    if (lead.brokerId && lead.brokerId === req.user.userId) {
+      return { allowed: true };
+    }
+    return { allowed: false, message: "Access denied: This lead was not referred by you" };
+  }
+  return { allowed: false, message: "Access denied" };
+}
+
 // PATCH /api/leads/:id/lost
 // Marks a lead as Lost/Dropped — PRD section 5.3: "A lead can also be
 // marked as Lost/Dropped at any stage." Sales Person can only do this
@@ -269,10 +301,14 @@ async function markLeadLost(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     const updateData = {
       status: "LOST",
       funnelStage: "LOST",
-      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
     };
 
     const [updatedLead] = await prisma.$transaction([
@@ -313,6 +349,11 @@ async function categorizeLead(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     // Category rule:
     // If CALL_NOT_PICKED -> Stage must be CALLBACK
     // If CALL_PICKED and previous stage was CALLBACK/CALL_NOT_PICKED -> switch to FOLLOW_UP
@@ -325,7 +366,6 @@ async function categorizeLead(req, res) {
 
     const updateData = {
       category,
-      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
     };
     if (newStage) {
       updateData.funnelStage = newStage;
@@ -384,6 +424,11 @@ async function updateFunnelStage(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     // Strictly prevent duplicate conversion / status events if already at this stage
     if (lead.funnelStage === stage) {
       return res.json(lead);
@@ -401,7 +446,6 @@ async function updateFunnelStage(req, res) {
 
     const updateData = {
       funnelStage: stage,
-      ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
     };
     if (newCategory && newCategory !== lead.category) {
       updateData.category = newCategory;
@@ -481,12 +525,16 @@ async function scheduleFollowUp(req, res) {
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
         followUpAt: followUpAt ? new Date(followUpAt) : null,
         followUpNotes: followUpAt ? (followUpNotes ? followUpNotes.trim() : null) : null,
-        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
       },
     });
 
@@ -561,6 +609,11 @@ async function sendWhatsAppToLead(req, res) {
 
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
 
     const { sendChatMitraLeadGreeting, sendCustomWhatsAppMessage } = require("../services/chatMitraService");
 
@@ -809,6 +862,11 @@ async function addLeadNote(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     const cleanNote = note.trim();
 
     // Create CallLog record for note audit/history
@@ -823,7 +881,7 @@ async function addLeadNote(req, res) {
       },
     });
 
-    // Update lead's formAnswers.callNotes and auto-assign if unassigned
+    // Update lead's formAnswers.callNotes
     const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
     currentFormAnswers.callNotes = cleanNote;
 
@@ -831,7 +889,6 @@ async function addLeadNote(req, res) {
       where: { id },
       data: {
         formAnswers: currentFormAnswers,
-        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
       },
       include: {
         assignedTo: { select: { id: true, name: true } },
@@ -869,6 +926,11 @@ async function updateLeadNote(req, res) {
     });
     if (!lead) {
       return res.status(404).json({ error: "Lead not found" });
+    }
+
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
     }
 
     const cleanNewNote = newNote.trim();
@@ -941,6 +1003,11 @@ async function deleteLeadNote(req, res) {
     });
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
     if (noteId && !noteId.startsWith("temp-") && noteId !== "formAnswers") {
       await prisma.callLog.deleteMany({ where: { id: noteId, leadId: id } });
     } else if (note) {
@@ -977,11 +1044,45 @@ async function deleteLeadNote(req, res) {
   }
 }
 
+// GET /api/leads/:id (Single Lead Detail with strict ownership enforcement)
+async function getLeadById(req, res) {
+  try {
+    const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
+        callLogs: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, notes: true, createdAt: true, durationSecs: true },
+        },
+        statusHistory: {
+          orderBy: { changedAt: "desc" },
+          select: { id: true, stage: true, changedAt: true },
+        },
+      },
+    });
+
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    const access = checkLeadAccess(req, lead);
+    if (!access.allowed) {
+      return res.status(403).json({ error: access.message });
+    }
+
+    return res.json(lead);
+  } catch (err) {
+    console.error("Failed to fetch lead:", err);
+    return res.status(500).json({ error: "Failed to fetch lead" });
+  }
+}
+
 module.exports = {
   createLead,
   getUnassignedLeads,
   getAllLeads,
   getMyLeads,
+  getLeadById,
   assignLead,
   autoAssignLeads,
   markLeadLost,

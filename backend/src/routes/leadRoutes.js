@@ -5,6 +5,7 @@ const {
   getUnassignedLeads,
   getAllLeads,
   getMyLeads,
+  getLeadById,
   assignLead,
   autoAssignLeads,
   markLeadLost,
@@ -41,6 +42,9 @@ router.post("/auto-assign", requireAuth, adminOnly, autoAssignLeads);
 
 // Sales Person endpoint
 router.get("/mine", requireAuth, salesOnly, getMyLeads);
+
+// Single lead endpoint (strict ownership checked inside controller)
+router.get("/:id", requireAuth, getLeadById);
 
 // Shared endpoints — Sales Person or Admin.
 router.patch("/:id/lost", requireAuth, markLeadLost);

@@ -17,6 +17,13 @@ async function logCall(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
+    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: "Access denied: This lead is not assigned to you" });
+    }
+    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
+      return res.status(403).json({ error: "Access denied: This lead was not referred by you" });
+    }
+
     const start = startTime ? new Date(startTime) : new Date();
     const end = endTime ? new Date(endTime) : new Date();
     const durationSecs = Math.max(0, Math.round((end - start) / 1000));

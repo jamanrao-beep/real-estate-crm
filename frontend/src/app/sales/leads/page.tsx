@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2 } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2, MapPin } from "lucide-react";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
 import { LeadNotesBox } from "@/components/LeadNotesBox";
@@ -42,7 +42,36 @@ interface Lead {
     notes?: string | null;
     createdAt?: string;
   }[];
+  statusHistory?: {
+    id: string;
+    stage: string;
+    changedAt: string;
+  }[];
+  assignmentHistory?: {
+    assignedAt: string;
+  }[];
   aiChatHistory?: any;
+}
+
+function toLocalDateString(d: Date): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isLeadAssignedOnDate(lead: Lead, targetDateStr: string): boolean {
+  if (!targetDateStr) return false;
+  if (Array.isArray(lead.assignmentHistory) && lead.assignmentHistory.length > 0) {
+    if (lead.assignmentHistory.some(a => a.assignedAt && toLocalDateString(new Date(a.assignedAt)) === targetDateStr)) {
+      return true;
+    }
+  }
+  if (lead.dateReceived && toLocalDateString(new Date(lead.dateReceived)) === targetDateStr) {
+    return true;
+  }
+  return false;
 }
 
 function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
@@ -104,14 +133,6 @@ function getLeadLastCallDate(lead: Lead): {
   return null;
 }
 
-function toLocalDateString(d: Date): string {
-  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 function formatFollowUpDate(dateStr: string) {
   const date = new Date(dateStr);
   const now = new Date();
@@ -148,6 +169,14 @@ export default function MyLeadsPage() {
   const [officeVisitFollowUpNotes, setOfficeVisitFollowUpNotes] = useState("");
   const [isSavingVisit, setIsSavingVisit] = useState(false);
 
+  // Site Visit Modal State
+  const [activeSiteVisitLead, setActiveSiteVisitLead] = useState<Lead | null>(null);
+  const [siteVisitProject, setSiteVisitProject] = useState("");
+  const [siteVisitNotes, setSiteVisitNotes] = useState("");
+  const [siteVisitFollowUpAt, setSiteVisitFollowUpAt] = useState("");
+  const [siteVisitFollowUpNotes, setSiteVisitFollowUpNotes] = useState("");
+  const [isSavingSiteVisit, setIsSavingSiteVisit] = useState(false);
+
   // Filters State
   const [categoryFilter, setCategoryFilter] = useState("");
   const [stageFilter, setStageFilter] = useState("");
@@ -158,7 +187,7 @@ export default function MyLeadsPage() {
   const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "LAST_7_DAYS" | "CUSTOM">("ALL");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [dateTarget, setDateTarget] = useState<"CALL" | "RECEIVED" | "ANY">("CALL");
+  const [dateTarget, setDateTarget] = useState<"ANY" | "CALL" | "VISIT" | "RECEIVED">("ANY");
 
   const todayStr = toLocalDateString(new Date());
   const yesterdayObj = new Date();
@@ -184,7 +213,7 @@ export default function MyLeadsPage() {
     setDatePreset("ALL");
     setStartDate("");
     setEndDate("");
-    setDateTarget("CALL");
+    setDateTarget("ANY");
   };
 
   const hasActiveFilters = Boolean(
@@ -250,12 +279,37 @@ export default function MyLeadsPage() {
     // Date / Daily Report Filter
     if (isDateFilterActive) {
       const callDates: string[] = [];
+      const visitDates: string[] = [];
+      const activityDates: string[] = [];
+
       if (Array.isArray(lead.callLogs)) {
         for (const cl of lead.callLogs) {
           if (cl.createdAt) {
             const d = new Date(cl.createdAt);
             const str = toLocalDateString(d);
-            if (str) callDates.push(str);
+            if (str) {
+              callDates.push(str);
+              activityDates.push(str);
+              const n = (cl.notes || "").toLowerCase();
+              if (n.includes("[site visit]") || n.includes("[office visit]") || n.includes("visit")) {
+                visitDates.push(str);
+              }
+            }
+          }
+        }
+      }
+
+      if (Array.isArray(lead.statusHistory)) {
+        for (const sh of lead.statusHistory) {
+          if (sh.changedAt) {
+            const d = new Date(sh.changedAt);
+            const str = toLocalDateString(d);
+            if (str) {
+              activityDates.push(str);
+              if (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE") {
+                visitDates.push(str);
+              }
+            }
           }
         }
       }
@@ -264,7 +318,24 @@ export default function MyLeadsPage() {
       if (lead.dateReceived) {
         const d = new Date(lead.dateReceived);
         const str = toLocalDateString(d);
-        if (str) receivedDateStr = str;
+        if (str) {
+          receivedDateStr = str;
+          activityDates.push(str);
+        }
+      }
+
+      const assignmentDates: string[] = [];
+      if (Array.isArray(lead.assignmentHistory)) {
+        for (const ah of lead.assignmentHistory) {
+          if (ah.assignedAt) {
+            const d = new Date(ah.assignedAt);
+            const str = toLocalDateString(d);
+            if (str) {
+              assignmentDates.push(str);
+              activityDates.push(str);
+            }
+          }
+        }
       }
 
       const matchesCondition = (dStr: string) => {
@@ -281,24 +352,60 @@ export default function MyLeadsPage() {
       };
 
       const hasMatchingCall = callDates.some(matchesCondition);
-      const hasMatchingReceived = receivedDateStr ? matchesCondition(receivedDateStr) : false;
+      const hasMatchingVisit = visitDates.some(matchesCondition);
+      const hasMatchingActivity = activityDates.some(matchesCondition);
+      const hasMatchingReceived = (receivedDateStr ? matchesCondition(receivedDateStr) : false) || assignmentDates.some(matchesCondition);
 
-      if (dateTarget === "CALL" && !hasMatchingCall) return false;
-      if (dateTarget === "RECEIVED" && !hasMatchingReceived) return false;
-      if (dateTarget === "ANY" && !hasMatchingCall && !hasMatchingReceived) return false;
+      if (dateTarget === "CALL") {
+        if ((stageFilter === "SITE_VISIT_DONE" || stageFilter === "OFFICE_VISIT_DONE") && hasMatchingVisit) {
+          // Allow visit match when filtering by visit stages
+        } else if (!hasMatchingCall) {
+          return false;
+        }
+      } else if (dateTarget === "VISIT") {
+        if (!hasMatchingVisit) return false;
+      } else if (dateTarget === "RECEIVED") {
+        if (!hasMatchingReceived) return false;
+      } else {
+        // "ANY"
+        if (!hasMatchingActivity && !hasMatchingCall && !hasMatchingVisit && !hasMatchingReceived) return false;
+      }
     }
 
     return true;
   });
 
-  const todayCallCount = leads.filter((l) =>
-    Array.isArray(l.callLogs) &&
-    l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr)
+  // Leads Given / Received Today & Yesterday matching Admin Dashboard
+  const todayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, todayStr)).length;
+  const yesterdayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, yesterdayStr)).length;
+
+  const todayCallsCount = leads.reduce((sum, l) => {
+    if (!Array.isArray(l.callLogs)) return sum;
+    return sum + l.callLogs.filter(cl => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr).length;
+  }, 0);
+
+  const todayVisitsCount = leads.filter((l) =>
+    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => {
+      if (!cl.createdAt || toLocalDateString(new Date(cl.createdAt)) !== todayStr) return false;
+      const n = (cl.notes || "").toLowerCase();
+      return n.includes("[site visit]") || n.includes("[office visit]") || n.includes("visit");
+    })) ||
+    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) =>
+      sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === todayStr &&
+      (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE")
+    ))
   ).length;
 
-  const yesterdayCallCount = leads.filter((l) =>
-    Array.isArray(l.callLogs) &&
-    l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === yesterdayStr)
+  const todayActivityCount = leads.filter((l) =>
+    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr)) ||
+    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) => sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === todayStr)) ||
+    isLeadAssignedOnDate(l, todayStr)
+  ).length;
+
+  const yesterdayActivityCount = leads.filter((l) =>
+    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === yesterdayStr)) ||
+    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) => sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === yesterdayStr)) ||
+    isLeadAssignedOnDate(l, yesterdayStr)
   ).length;
 
   // Dynamic counts for all categories & funnel stages
@@ -424,20 +531,38 @@ export default function MyLeadsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const fetchLeads = useCallback(async () => {
-    setIsLoading(true);
+  const fetchLeads = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await api.get("/leads/mine");
       setLeads(res.data);
     } catch (err) {
       console.error("Failed to fetch my leads", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchLeads();
+
+    // Auto-refresh polling every 30 seconds so new leads appear in real-time
+    const interval = setInterval(() => {
+      fetchLeads(true);
+    }, 30000);
+
+    // Refresh when user returns to tab
+    const handleFocus = () => {
+      fetchLeads(true);
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
   }, [fetchLeads]);
 
   const updateCategory = async (id: string, category: string) => {
@@ -469,6 +594,14 @@ export default function MyLeadsPage() {
   };
 
   const updateStage = async (id: string, stage: string) => {
+    if (stage === "SITE_VISIT_DONE") {
+      const lead = leads.find((l) => l.id === id);
+      if (lead) {
+        openSiteVisitModal(lead);
+        return;
+      }
+    }
+
     if (stage === "OFFICE_VISIT_DONE") {
       const lead = leads.find((l) => l.id === id);
       if (lead) {
@@ -644,6 +777,83 @@ export default function MyLeadsPage() {
     }
   };
 
+  const openSiteVisitModal = (lead: Lead) => {
+    setActiveSiteVisitLead(lead);
+    const sourceText = lead.source || lead.sourceForm || "";
+    let detectedProject = "";
+    if (/fun\s*valley/i.test(sourceText)) detectedProject = "Fun Valley";
+    else if (/sahastradhara|sd/i.test(sourceText)) detectedProject = "Sahastradhara";
+    else if (/rani\s*pokhari/i.test(sourceText)) detectedProject = "Rani Pokhari";
+    else if (/thano/i.test(sourceText)) detectedProject = "Thano";
+
+    setSiteVisitProject(detectedProject);
+    setSiteVisitNotes("");
+    setSiteVisitFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    setSiteVisitFollowUpNotes(lead.followUpNotes || "");
+  };
+
+  const handleSaveSiteVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSiteVisitLead) return;
+
+    try {
+      setIsSavingSiteVisit(true);
+      await api.patch(`/leads/${activeSiteVisitLead.id}/stage`, { stage: "SITE_VISIT_DONE" });
+      await api.patch(`/leads/${activeSiteVisitLead.id}/category`, { category: "CALL_PICKED" });
+
+      const cleanNotes = siteVisitNotes.trim();
+      const proj = siteVisitProject.trim();
+      const visitNote = cleanNotes
+        ? `[Site Visit${proj ? ` - ${proj}` : ""}] ${cleanNotes}`
+        : `[Site Visit${proj ? ` - ${proj}` : ""}] Client completed site visit.`;
+
+      await api.post("/calls", {
+        leadId: activeSiteVisitLead.id,
+        notes: visitNote,
+        followUpAt: siteVisitFollowUpAt ? new Date(siteVisitFollowUpAt).toISOString() : null,
+        followUpNotes: siteVisitFollowUpNotes || null,
+      });
+
+      const newCallLogEntry = {
+        id: "temp-" + Date.now(),
+        notes: visitNote,
+        createdAt: new Date().toISOString(),
+      };
+
+      const newStatusHistoryEntry = {
+        id: "temp-sh-" + Date.now(),
+        stage: "SITE_VISIT_DONE",
+        changedAt: new Date().toISOString(),
+      };
+
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === activeSiteVisitLead.id
+            ? {
+                ...l,
+                category: "CALL_PICKED",
+                funnelStage: "SITE_VISIT_DONE",
+                callLogs: [newCallLogEntry, ...(l.callLogs || [])],
+                statusHistory: [newStatusHistoryEntry, ...(l.statusHistory || [])],
+                followUpAt: siteVisitFollowUpAt ? new Date(siteVisitFollowUpAt).toISOString() : l.followUpAt,
+                followUpNotes: siteVisitFollowUpAt ? (siteVisitFollowUpNotes || null) : l.followUpNotes,
+              }
+            : l
+        )
+      );
+
+      alert("Site Visit recorded successfully! Stage updated to Site Visit Done.");
+      setActiveSiteVisitLead(null);
+      setSiteVisitNotes("");
+      setSiteVisitProject("");
+    } catch (err: any) {
+      console.error("Failed to record site visit", err);
+      alert(err?.response?.data?.error || "Failed to record site visit");
+    } finally {
+      setIsSavingSiteVisit(false);
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header with Title and Export Button */}
@@ -671,6 +881,89 @@ export default function MyLeadsPage() {
                 : `Export CSV (${leads.length})`}
             </span>
           </Button>
+        </div>
+      </div>
+
+      {/* Daily Performance KPI Summary Banner */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div
+          onClick={() => {
+            setDatePreset("TODAY");
+            setDateTarget("RECEIVED");
+            setCategoryFilter("");
+            setStageFilter("");
+          }}
+          className="bg-surface border border-border hover:border-emerald-500/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
+          title="Click to filter leads given to you today"
+        >
+          <div className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Leads Given Today
+            </span>
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-bold text-ink group-hover:text-emerald-600 transition-colors">
+              {todayLeadsGivenCount}
+            </span>
+            <span className="text-xs text-ink-soft font-medium">assigned</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => {
+            setDatePreset("TODAY");
+            setDateTarget("CALL");
+          }}
+          className="bg-surface border border-border hover:border-accent/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
+          title="Click to filter leads called today"
+        >
+          <div className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider flex items-center gap-1.5">
+            <Phone size={12} className="text-accent" />
+            Calls Made Today
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-bold text-accent">
+              {todayCallsCount}
+            </span>
+            <span className="text-xs text-ink-soft font-medium">calls</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => {
+            setDatePreset("TODAY");
+            setDateTarget("VISIT");
+          }}
+          className="bg-surface border border-border hover:border-indigo-500/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
+          title="Click to filter visits today"
+        >
+          <div className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider flex items-center gap-1.5">
+            <Building2 size={12} className="text-indigo-600 dark:text-indigo-400" />
+            Visits Done Today
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+              {todayVisitsCount}
+            </span>
+            <span className="text-xs text-ink-soft font-medium">site / office</span>
+          </div>
+        </div>
+
+        <div
+          onClick={resetFilters}
+          className="bg-surface border border-border hover:border-ink/40 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
+          title="Click to view all leads"
+        >
+          <div className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider">
+            Total Active Leads
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-bold text-ink">
+              {leads.length}
+            </span>
+            <span className="text-xs text-ink-soft font-medium">in workspace</span>
+          </div>
         </div>
       </div>
 
@@ -820,11 +1113,11 @@ export default function MyLeadsPage() {
                 }`}
               >
                 <span>📅 Today</span>
-                {todayCallCount > 0 && (
+                {(dateTarget === "RECEIVED" ? todayLeadsGivenCount : todayActivityCount) > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     datePreset === "TODAY" ? "bg-white/20 text-white" : "bg-accent/15 text-accent"
                   }`}>
-                    {todayCallCount}
+                    {dateTarget === "RECEIVED" ? todayLeadsGivenCount : todayActivityCount}
                   </span>
                 )}
               </button>
@@ -838,11 +1131,11 @@ export default function MyLeadsPage() {
                 }`}
               >
                 <span>Yesterday</span>
-                {yesterdayCallCount > 0 && (
+                {yesterdayActivityCount > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     datePreset === "YESTERDAY" ? "bg-white/20 text-white" : "bg-ink-soft/20 text-ink-soft"
                   }`}>
-                    {yesterdayCallCount}
+                    {yesterdayActivityCount}
                   </span>
                 )}
               </button>
@@ -892,12 +1185,13 @@ export default function MyLeadsPage() {
               <span className="text-[11px] text-ink-soft font-medium">Filter by:</span>
               <select
                 value={dateTarget}
-                onChange={(e) => setDateTarget(e.target.value as "CALL" | "RECEIVED" | "ANY")}
+                onChange={(e) => setDateTarget(e.target.value as "ANY" | "CALL" | "VISIT" | "RECEIVED")}
                 className="bg-transparent text-ink text-xs font-semibold focus:outline-none cursor-pointer"
               >
+                <option value="ANY">Any Activity (Calls, Visits, Received)</option>
                 <option value="CALL">Call Date (Calls Made)</option>
+                <option value="VISIT">Visit Date (Site / Office Visits)</option>
                 <option value="RECEIVED">Date Received (New Leads)</option>
-                <option value="ANY">Any (Called or Received)</option>
               </select>
             </div>
           </div>
@@ -935,6 +1229,28 @@ export default function MyLeadsPage() {
             }`}
           >
             All ({leads.length})
+          </button>
+
+          {/* Given Today quick filter matching Admin panel */}
+          <button
+            type="button"
+            onClick={() => {
+              if (datePreset === "TODAY" && dateTarget === "RECEIVED") {
+                setDatePreset("ALL");
+                setDateTarget("ANY");
+              } else {
+                setDatePreset("TODAY");
+                setDateTarget("RECEIVED");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+              datePreset === "TODAY" && dateTarget === "RECEIVED"
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                : "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Given Today ({todayLeadsGivenCount})
           </button>
 
           {/* Project Chips */}
@@ -1181,10 +1497,26 @@ export default function MyLeadsPage() {
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search size={20} className="text-ink-soft/60" />
                       <p className="font-medium text-ink">No leads match your selected filters</p>
-                      <p className="text-xs text-ink-soft">Try selecting a different filter or clearing search.</p>
-                      <Button variant="outline" size="sm" onClick={resetFilters} className="mt-2 text-xs">
-                        <RotateCcw size={13} className="mr-1.5" /> Clear Filters
-                      </Button>
+                      <p className="text-xs text-ink-soft">
+                        {isDateFilterActive && stageFilter
+                          ? `No ${formatStageLabel(stageFilter)} leads found for the selected date.`
+                          : "Try selecting a different filter or clearing search."}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        {isDateFilterActive && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => applyDatePreset("ALL")}
+                            className="text-xs bg-accent/15 text-accent hover:bg-accent/25"
+                          >
+                            View All Time Leads
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={resetFilters} className="text-xs">
+                          <RotateCcw size={13} className="mr-1.5" /> Clear All Filters
+                        </Button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -1392,10 +1724,26 @@ export default function MyLeadsPage() {
           <div className="bg-surface border border-border rounded-xl p-6 text-center text-ink-soft flex flex-col items-center justify-center gap-2">
             <Search size={20} className="text-border" />
             <p className="font-medium text-ink">No leads match filters</p>
-            <p className="text-xs">Try selecting a different filter or clearing search.</p>
-            <Button variant="outline" size="sm" onClick={resetFilters} className="mt-1 text-xs">
-              <RotateCcw size={13} className="mr-1.5" /> Reset Filters
-            </Button>
+            <p className="text-xs">
+              {isDateFilterActive && stageFilter
+                ? `No ${formatStageLabel(stageFilter)} leads found for selected date.`
+                : "Try selecting a different filter or clearing search."}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              {isDateFilterActive && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => applyDatePreset("ALL")}
+                  className="text-xs bg-accent/15 text-accent hover:bg-accent/25"
+                >
+                  View All Time Leads
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={resetFilters} className="text-xs">
+                <RotateCcw size={13} className="mr-1.5" /> Clear Filters
+              </Button>
+            </div>
           </div>
         ) : (
           filteredLeads.map((lead) => {
@@ -1799,6 +2147,146 @@ export default function MyLeadsPage() {
                   className="h-10 px-4 font-semibold bg-amber-600 hover:bg-amber-700 text-white"
                 >
                   {isSavingVisit ? "Saving Visit..." : "Save Office Visit & Update Stage"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Site Visit Modal */}
+      {activeSiteVisitLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-ink/40 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-surface border border-border rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-xl my-8">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <MapPin size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-ink">Record Site Visit</h3>
+                  <p className="text-xs text-ink-soft">
+                    Physical site inspection for <strong className="text-ink">{activeSiteVisitLead.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSiteVisitLead(null)}
+                className="p-1 rounded-lg text-ink-soft hover:text-ink hover:bg-bg transition-colors"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSiteVisit} className="mt-4 space-y-3.5">
+              {/* Lead Details Banner */}
+              <div className="bg-bg/80 border border-border/80 rounded-xl p-3 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-ink-soft">Phone: </span>
+                  <span className="font-semibold text-ink">{activeSiteVisitLead.phone}</span>
+                </div>
+                {activeSiteVisitLead.source && (
+                  <SourceBadge source={activeSiteVisitLead.source} />
+                )}
+              </div>
+
+              {/* Project / Site Visited */}
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  Site / Project Visited
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2">
+                  {["Fun Valley", "Sahastradhara", "Rani Pokhari", "Thano"].map((proj) => (
+                    <button
+                      key={proj}
+                      type="button"
+                      onClick={() => setSiteVisitProject(proj)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium border text-center transition-all ${
+                        siteVisitProject === proj
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-semibold"
+                          : "bg-bg border-border text-ink-soft hover:text-ink hover:bg-surface"
+                      }`}
+                    >
+                      {proj}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  placeholder="Or enter custom site location / plot number..."
+                  value={siteVisitProject}
+                  onChange={(e) => setSiteVisitProject(e.target.value)}
+                  className="h-9 text-xs sm:text-sm bg-bg"
+                />
+              </div>
+
+              {/* Visit Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1">
+                  Site Visit Discussion & Feedback <span className="text-danger">*</span>
+                </label>
+                <textarea
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  rows={3}
+                  required
+                  value={siteVisitNotes}
+                  onChange={(e) => setSiteVisitNotes(e.target.value)}
+                  placeholder="e.g. Client inspected plot #14 at Fun Valley, liked the view and 30ft road. Offered discount for token advance this week..."
+                />
+              </div>
+
+              {/* Follow-up Section */}
+              <div className="border-t border-border pt-3 space-y-2.5">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink">
+                  <Calendar size={14} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>Next Follow-Up Reminder (Optional)</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    Follow-Up Date & Time
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    min={new Date().toISOString().slice(0, 16)}
+                    value={siteVisitFollowUpAt}
+                    onChange={(e) => setSiteVisitFollowUpAt(e.target.value)}
+                    className="h-10 text-xs sm:text-sm bg-bg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
+                    Follow-Up Notes
+                  </label>
+                  <textarea
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    rows={2}
+                    value={siteVisitFollowUpNotes}
+                    onChange={(e) => setSiteVisitFollowUpNotes(e.target.value)}
+                    placeholder="e.g. Call for token payment decision, share registry documents..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveSiteVisitLead(null)}
+                  className="h-10 px-4"
+                  disabled={isSavingSiteVisit}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSavingSiteVisit}
+                  className="h-10 px-4 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {isSavingSiteVisit ? "Saving Visit..." : "Save Site Visit & Update Stage"}
                 </Button>
               </div>
             </form>
