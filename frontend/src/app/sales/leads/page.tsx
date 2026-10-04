@@ -251,7 +251,7 @@ export default function MyLeadsPage() {
       } else if (sourceFilter === "EXCEL") {
         if (!leadSource.includes("excel") && !leadSource.includes("csv")) return false;
       } else if (sourceFilter === "WHATSAPP") {
-        if (!leadSource.includes("whatsapp") && !leadSource.includes("chatmitra")) return false;
+        if (!leadSource.includes("whatsapp")) return false;
       } else if (sourceFilter === "MANUAL") {
         if (!leadSource.includes("manual") && !leadSource.includes("entry") && !leadSource.includes("test") && !leadSource.includes("direct")) return false;
       } else if (sourceFilter === "FUN_VALLEY") {

@@ -179,7 +179,7 @@ export default function UnassignedLeadsPage() {
       } else if (sourceFilter === "EXCEL") {
         matchesSource = leadSource.includes("excel") || leadSource.includes("csv");
       } else if (sourceFilter === "WHATSAPP") {
-        matchesSource = leadSource.includes("whatsapp") || leadSource.includes("chatmitra");
+        matchesSource = leadSource.includes("whatsapp");
       } else if (sourceFilter === "MANUAL") {
         matchesSource = leadSource.includes("manual") || leadSource.includes("entry") || leadSource.includes("test");
       } else if (sourceFilter === "FUN_VALLEY") {

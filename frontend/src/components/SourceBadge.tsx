@@ -73,11 +73,11 @@ export function SourceBadge({ source, className = "" }: SourceBadgeProps) {
       </span>
     );
   }
-  if (s.includes("whatsapp") || s.includes("chatmitra")) {
+  if (s.includes("whatsapp")) {
     return (
       <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 ${className}`}>
         <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-        {sourceStr || "WhatsApp Bot"}
+        {sourceStr || "WhatsApp"}
       </span>
     );
   }

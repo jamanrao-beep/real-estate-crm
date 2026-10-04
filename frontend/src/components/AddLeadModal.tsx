@@ -214,7 +214,7 @@ export default function AddLeadModal({
               >
                 <option value="Facebook Lead Ad">Facebook Lead Ad</option>
                 <option value="Google Sheet / Webhook">Google Sheet / Webhook</option>
-                <option value="WhatsApp Bot (ChatMitra)">WhatsApp Bot</option>
+                <option value="WhatsApp">WhatsApp</option>
                 <option value="Website Contact Form">Website Form</option>
                 <option value="Direct Call / Walk-in">Direct Call / Walk-in</option>
                 <option value="Channel Partner">Channel Partner</option>

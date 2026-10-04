@@ -258,19 +258,6 @@ async function syncSingleSheet(project) {
 
       synced++;
       console.log(`[GoogleSheetSync] [${project.name}] Imported new lead: ${name} (${phone})`);
-
-      // Trigger automated WhatsApp greeting via ChatMitra Bot for fresh leads (within last 24h)
-      try {
-        const isRecent = (Date.now() - dateReceived.getTime()) < (24 * 60 * 60 * 1000);
-        if (isRecent && process.env.CHATMITRA_ENABLED === "true") {
-          const { sendChatMitraLeadGreeting } = require("./chatMitraService");
-          sendChatMitraLeadGreeting(newLead).catch(err =>
-            console.error(`[GoogleSheetSync] WhatsApp greeting error for ${name}:`, err.message)
-          );
-        }
-      } catch (err) {
-        // ChatMitra optional
-      }
     }
 
     return {
