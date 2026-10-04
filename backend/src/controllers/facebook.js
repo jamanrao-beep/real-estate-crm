@@ -99,10 +99,6 @@ async function fetchAndStoreLead(leadgenId, formId) {
 
   console.log(`New lead created from Facebook: ${name} (${cleanPhone})`);
 
-  // Automated WhatsApp greeting disabled ("bot ka chakkar hata do")
-  // const { sendChatMitraLeadGreeting } = require("../services/chatMitraService");
-  // sendChatMitraLeadGreeting(newLead).catch((err) => ...);
-
   return newLead;
 }
 
