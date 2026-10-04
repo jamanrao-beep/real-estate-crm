@@ -16,7 +16,6 @@ const {
   syncSheetLeads,
   receiveWebhookLead,
   importBulkLeads,
-  sendWhatsAppToLead,
   addLeadNote,
   updateLeadNote,
   deleteLeadNote,
@@ -30,9 +29,6 @@ router.post("/", requireAuth, createLead);
 router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);
 router.post("/webhook", receiveWebhookLead);
 router.post("/import-bulk", requireAuth, adminOnly, importBulkLeads);
-
-// WhatsApp Direct Bot Greeting
-router.post("/:id/send-whatsapp", requireAuth, sendWhatsAppToLead);
 
 // Admin-only endpoints
 router.get("/unassigned", requireAuth, adminOnly, getUnassignedLeads);
