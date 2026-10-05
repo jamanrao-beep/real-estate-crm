@@ -15,7 +15,7 @@ export function getLeadCallNotes(lead: any): LeadNoteItem[] {
   const list: LeadNoteItem[] = [];
   if (Array.isArray(lead?.callLogs)) {
     for (const cl of lead.callLogs) {
-      if (cl.notes && cl.notes.trim()) {
+      if (cl.notes && cl.notes.trim() && !cl.notes.trim().startsWith("[AUDIT:")) {
         list.push({
           id: cl.id,
           note: cl.notes.trim(),
@@ -30,11 +30,49 @@ export function getLeadCallNotes(lead: any): LeadNoteItem[] {
   if (
     lead?.formAnswers?.callNotes &&
     typeof lead.formAnswers.callNotes === "string" &&
-    lead.formAnswers.callNotes.trim()
+    lead.formAnswers.callNotes.trim() &&
+    !lead.formAnswers.callNotes.trim().startsWith("[AUDIT:")
   ) {
     const cn = lead.formAnswers.callNotes.trim();
     if (!list.some((item) => item.note === cn)) {
       list.unshift({ id: "formAnswers", note: cn, source: "formAnswers" });
+    }
+  }
+  return list;
+}
+
+export interface LeadAuditItem {
+  id?: string;
+  action: string;
+  actor: string;
+  date: string;
+  details: string;
+  raw: string;
+}
+
+export function getLeadAuditLogs(lead: any): LeadAuditItem[] {
+  const list: LeadAuditItem[] = [];
+  if (Array.isArray(lead?.callLogs)) {
+    for (const cl of lead.callLogs) {
+      if (cl.notes && cl.notes.trim().startsWith("[AUDIT:")) {
+        const text = cl.notes.trim();
+        const actionMatch = text.match(/^\[AUDIT:\s*([^\]]+)\]/i);
+        const action = actionMatch ? actionMatch[1].trim() : "ACTION";
+
+        const byMatch = text.match(/by\s+([^at|]+?)\s+at\s+([^|]+?)(?:\s*\|\s*(.*))?$/i);
+        const actor = byMatch ? byMatch[1].trim() : "Sales Rep";
+        const dateStr = byMatch ? byMatch[2].trim() : (cl.createdAt ? new Date(cl.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "");
+        const details = byMatch && byMatch[3] ? byMatch[3].trim() : text;
+
+        list.push({
+          id: cl.id,
+          action,
+          actor,
+          date: dateStr,
+          details,
+          raw: text,
+        });
+      }
     }
   }
   return list;
@@ -50,6 +88,7 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
   const [isAdding, setIsAdding] = useState(false);
   const [newNoteText, setNewNoteText] = useState("");
   const [isSubmittingNew, setIsSubmittingNew] = useState(false);
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
 
   // Editing state
   const [editingTarget, setEditingTarget] = useState<{ id?: string; oldNote: string } | null>(null);
@@ -60,6 +99,18 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   const notesList = getLeadCallNotes(lead);
+  const auditLogs = getLeadAuditLogs(lead);
+
+  const notifyUpdate = (updatedLeadData: any) => {
+    if (!onLeadUpdated) return;
+    onLeadUpdated({
+      ...lead,
+      ...updatedLeadData,
+      assignmentHistory: updatedLeadData.assignmentHistory || lead.assignmentHistory,
+      statusHistory: updatedLeadData.statusHistory || lead.statusHistory,
+      callLogs: updatedLeadData.callLogs || lead.callLogs,
+    });
+  };
 
   const handleAddNote = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -68,8 +119,8 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
     try {
       setIsSubmittingNew(true);
       const res = await api.post(`/leads/${lead.id}/notes`, { note: newNoteText.trim() });
-      if (res.data?.lead && onLeadUpdated) {
-        onLeadUpdated(res.data.lead);
+      if (res.data?.lead) {
+        notifyUpdate(res.data.lead);
       }
       setNewNoteText("");
       setIsAdding(false);
@@ -103,8 +154,8 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
         oldNote: editingTarget.oldNote,
         newNote: editText.trim(),
       });
-      if (res.data?.lead && onLeadUpdated) {
-        onLeadUpdated(res.data.lead);
+      if (res.data?.lead) {
+        notifyUpdate(res.data.lead);
       }
       setEditingTarget(null);
       setEditText("");
@@ -128,8 +179,8 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
           note: noteItem.note,
         },
       });
-      if (res.data?.lead && onLeadUpdated) {
-        onLeadUpdated(res.data.lead);
+      if (res.data?.lead) {
+        notifyUpdate(res.data.lead);
       }
     } catch (err: any) {
       console.error("Failed to delete note", err);
@@ -143,14 +194,57 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
   if (notesList.length === 0 && !isAdding) {
     return (
       <div className={`mt-2 ${className}`}>
-        <button
-          type="button"
-          onClick={() => setIsAdding(true)}
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-white bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 rounded-md px-2 py-1 transition-all cursor-pointer shadow-xs"
-        >
-          <Plus size={12} className="text-sky-600 dark:text-sky-400" />
-          <span>+ Add Note</span>
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsAdding(true)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-white bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 rounded-md px-2 py-1 transition-all cursor-pointer shadow-xs"
+          >
+            <Plus size={12} className="text-sky-600 dark:text-sky-400" />
+            <span>+ Add Note</span>
+          </button>
+          {auditLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAuditTrail(!showAuditTrail)}
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-soft hover:text-ink bg-surface-muted/60 hover:bg-surface-muted border border-border/60 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
+              title="View timestamped sales actions audit trail"
+            >
+              <span>⏱️ History ({auditLogs.length})</span>
+            </button>
+          )}
+        </div>
+
+        {showAuditTrail && auditLogs.length > 0 && (
+          <div className="mt-2 p-2 rounded-lg border border-border bg-bg/80 text-[10px] space-y-1.5 animate-in fade-in duration-150">
+            <div className="font-semibold text-ink flex items-center justify-between border-b border-border/60 pb-1">
+              <span>Audit Trail (Timestamped)</span>
+              <button
+                type="button"
+                onClick={() => setShowAuditTrail(false)}
+                className="text-ink-soft hover:text-ink text-[11px]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+              {auditLogs.map((log, idx) => (
+                <div key={log.id || idx} className="text-ink-soft border-b border-border/30 pb-1 last:border-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold px-1 py-0.2 rounded bg-accent/10 text-accent text-[9px] uppercase">
+                      {log.action}
+                    </span>
+                    <span className="text-ink font-medium">{log.actor}</span>
+                    <span className="text-[9px] opacity-75">{log.date}</span>
+                  </div>
+                  <div className="text-ink/90 italic pl-1 mt-0.5 break-words">
+                    {log.details}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -172,6 +266,16 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
               {notesList[0].date}
             </span>
           )}
+          {auditLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAuditTrail(!showAuditTrail)}
+              title="View timestamped sales actions audit trail"
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-800/80 dark:text-sky-200/80 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            >
+              <span>⏱️ ({auditLogs.length})</span>
+            </button>
+          )}
           {!isAdding && (
             <button
               type="button"
@@ -188,6 +292,37 @@ export function LeadNotesBox({ lead, onLeadUpdated, className = "" }: LeadNotesB
           )}
         </div>
       </div>
+
+      {showAuditTrail && auditLogs.length > 0 && (
+        <div className="mt-1 p-2 rounded-lg border border-border bg-bg/80 text-[10px] space-y-1.5 animate-in fade-in duration-150">
+          <div className="font-semibold text-ink flex items-center justify-between border-b border-border/60 pb-1">
+            <span>Audit Trail (Timestamped)</span>
+            <button
+              type="button"
+              onClick={() => setShowAuditTrail(false)}
+              className="text-ink-soft hover:text-ink text-[11px]"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+            {auditLogs.map((log, idx) => (
+              <div key={log.id || idx} className="text-ink-soft border-b border-border/30 pb-1 last:border-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-semibold px-1 py-0.2 rounded bg-accent/10 text-accent text-[9px] uppercase">
+                    {log.action}
+                  </span>
+                  <span className="text-ink font-medium">{log.actor}</span>
+                  <span className="text-[9px] opacity-75">{log.date}</span>
+                </div>
+                <div className="text-ink/90 italic pl-1 mt-0.5 break-words">
+                  {log.details}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Inline Add Note Form */}
       {isAdding && (

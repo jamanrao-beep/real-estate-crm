@@ -35,41 +35,100 @@ interface Lead {
   funnelStage: string | null;
   status: string;
   dateReceived: string;
+  assignedToId?: string | null;
+  assignedTo?: {
+    id: string;
+    name: string;
+  } | null;
   followUpAt?: string | null;
   followUpNotes?: string | null;
   callLogs?: {
     id: string;
     notes?: string | null;
     createdAt?: string;
+    salesPersonId?: string;
   }[];
   statusHistory?: {
     id: string;
     stage: string;
     changedAt: string;
+    changedById?: string;
   }[];
   assignmentHistory?: {
     assignedAt: string;
+    assignedToId?: string;
+    assignedById?: string;
   }[];
   aiChatHistory?: any;
 }
 
-function toLocalDateString(d: Date): string {
-  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+// Deterministic Indian Standard Time (Asia/Kolkata) date string: YYYY-MM-DD
+function toISTDateString(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dateObj = typeof d === "string" ? new Date(d) : d;
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+  return dateObj.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
+// Backward compatible alias
+function toLocalDateString(d: Date | string | null | undefined): string {
+  return toISTDateString(d);
 }
 
 function isLeadAssignedOnDate(lead: Lead, targetDateStr: string): boolean {
   if (!targetDateStr) return false;
   if (Array.isArray(lead.assignmentHistory) && lead.assignmentHistory.length > 0) {
-    if (lead.assignmentHistory.some(a => a.assignedAt && toLocalDateString(new Date(a.assignedAt)) === targetDateStr)) {
+    if (lead.assignmentHistory.some(a => a.assignedAt && toISTDateString(a.assignedAt) === targetDateStr)) {
       return true;
     }
   }
-  if (lead.dateReceived && toLocalDateString(new Date(lead.dateReceived)) === targetDateStr) {
+  if (lead.dateReceived && toISTDateString(lead.dateReceived) === targetDateStr) {
     return true;
+  }
+  return false;
+}
+
+// Official Site Visit / Office Visit marked done on a specific date (in IST)
+function isLeadVisitDoneOnDate(lead: Lead, targetDateStr: string): boolean {
+  if (!targetDateStr) return false;
+  // 1. Status history stage change to SITE_VISIT_DONE or OFFICE_VISIT_DONE on target date
+  if (Array.isArray(lead.statusHistory)) {
+    const hasStatusChange = lead.statusHistory.some((sh) =>
+      sh.changedAt &&
+      toISTDateString(sh.changedAt) === targetDateStr &&
+      (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE")
+    );
+    if (hasStatusChange) return true;
+  }
+  // 2. Official visit interaction logged on target date
+  if (Array.isArray(lead.callLogs)) {
+    const hasVisitLog = lead.callLogs.some((cl) => {
+      if (!cl.createdAt || toISTDateString(cl.createdAt) !== targetDateStr) return false;
+      const notes = (cl.notes || "").toLowerCase();
+      if (notes.startsWith("[audit:")) return false;
+      return notes.includes("[site visit") || notes.includes("[office visit");
+    });
+    if (hasVisitLog) return true;
+  }
+  return false;
+}
+
+// Number of calls logged on a specific date (in IST)
+function getLeadCallsOnDate(lead: Lead, targetDateStr: string): number {
+  if (!targetDateStr || !Array.isArray(lead.callLogs)) return 0;
+  return lead.callLogs.filter((cl) => cl.createdAt && toISTDateString(cl.createdAt) === targetDateStr && !cl.notes?.startsWith("[AUDIT:")).length;
+}
+
+// Lead active on a specific date (calls, visits, assigned, or status updated in IST)
+function isLeadActiveOnDate(lead: Lead, targetDateStr: string): boolean {
+  if (!targetDateStr) return false;
+  if (getLeadCallsOnDate(lead, targetDateStr) > 0) return true;
+  if (isLeadVisitDoneOnDate(lead, targetDateStr)) return true;
+  if (isLeadAssignedOnDate(lead, targetDateStr)) return true;
+  if (Array.isArray(lead.statusHistory)) {
+    if (lead.statusHistory.some((sh) => sh.changedAt && toISTDateString(sh.changedAt) === targetDateStr)) {
+      return true;
+    }
   }
   return false;
 }
@@ -78,21 +137,60 @@ function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
   const list: { note: string; date?: string }[] = [];
   if (Array.isArray(lead.callLogs)) {
     for (const cl of lead.callLogs) {
-      if (cl.notes && cl.notes.trim()) {
+      if (cl.notes && cl.notes.trim() && !cl.notes.startsWith("[AUDIT:")) {
         list.push({
           note: cl.notes.trim(),
-          date: cl.createdAt ? new Date(cl.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : undefined
+          date: cl.createdAt
+            ? new Date(cl.createdAt).toLocaleDateString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                day: "numeric",
+                month: "short",
+              })
+            : undefined,
         });
       }
     }
   }
-  if (lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim()) {
+  if (lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim() && !lead.formAnswers.callNotes.startsWith("[AUDIT:")) {
     const cn = lead.formAnswers.callNotes.trim();
     if (!list.some(item => item.note === cn)) {
       list.unshift({ note: cn });
     }
   }
   return list;
+}
+
+// Retrieves all relevant latest remarks for display in Source & Notes
+function getLeadLatestRemarks(lead: Lead): {
+  followUpNote?: string | null;
+  latestCallNote?: string | null;
+  originalNote?: string | null;
+} {
+  const followUpNote = lead.followUpNotes?.trim() || null;
+
+  let latestCallNote: string | null = null;
+  if (Array.isArray(lead.callLogs) && lead.callLogs.length > 0) {
+    const sorted = [...lead.callLogs]
+      .filter((cl) => cl.notes && cl.notes.trim() && !cl.notes.startsWith("[AUDIT:"))
+      .sort((a, b) => {
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tB - tA;
+      });
+    if (sorted.length > 0 && sorted[0].notes) {
+      latestCallNote = sorted[0].notes.trim();
+    }
+  }
+
+  if (!latestCallNote && lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim() && !lead.formAnswers.callNotes.startsWith("[AUDIT:")) {
+    latestCallNote = lead.formAnswers.callNotes.trim();
+  }
+
+  const originalNote = typeof lead.formAnswers?.notes === "string" && lead.formAnswers.notes.trim()
+    ? lead.formAnswers.notes.trim()
+    : null;
+
+  return { followUpNote, latestCallNote, originalNote };
 }
 
 function getLeadLastCallDate(lead: Lead): {
@@ -103,22 +201,39 @@ function getLeadLastCallDate(lead: Lead): {
   totalCalls: number;
 } | null {
   if (Array.isArray(lead.callLogs) && lead.callLogs.length > 0) {
-    const latest = lead.callLogs.find((cl) => cl.createdAt);
+    const validLogs = lead.callLogs
+      .filter((cl) => cl.createdAt)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+
+    const latest = validLogs[0];
     if (latest && latest.createdAt) {
       const date = new Date(latest.createdAt);
       if (!isNaN(date.getTime())) {
-        const now = new Date();
-        const isToday = date.toDateString() === now.toDateString();
-        const yest = new Date(now);
-        yest.setDate(yest.getDate() - 1);
-        const isYesterday = date.toDateString() === yest.toDateString();
+        const callDateIST = toISTDateString(date);
+        const nowIST = toISTDateString(new Date());
+        const yesterdayObj = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const yesterdayIST = toISTDateString(yesterdayObj);
 
-        const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const isToday = callDateIST === nowIST;
+        const isYesterday = callDateIST === yesterdayIST;
+
+        const timeStr = date.toLocaleTimeString("en-IN", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+
         const dateStr = isToday
           ? "Today"
           : isYesterday
           ? "Yesterday"
-          : date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+          : date.toLocaleDateString("en-IN", {
+              timeZone: "Asia/Kolkata",
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
 
         return {
           dateStr,
@@ -135,23 +250,49 @@ function getLeadLastCallDate(lead: Lead): {
 
 function formatFollowUpDate(dateStr: string) {
   const date = new Date(dateStr);
-  const now = new Date();
-  
-  const isToday = date.toDateString() === now.toDateString();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const isTomorrow = date.toDateString() === tomorrow.toDateString();
+  if (isNaN(date.getTime())) return "";
 
-  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateIST = toISTDateString(date);
+  const nowIST = toISTDateString(new Date());
+  const tomorrowObj = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const tomorrowIST = toISTDateString(tomorrowObj);
+
+  const isToday = dateIST === nowIST;
+  const isTomorrow = dateIST === tomorrowIST;
+
+  const timeStr = date.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+
   if (isToday) return `Today at ${timeStr}`;
   if (isTomorrow) return `Tomorrow at ${timeStr}`;
 
-  return `${date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} at ${timeStr}`;
+  return `${date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+  })} at ${timeStr}`;
 }
 
 export default function MyLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id || parsed?.userId) {
+          setCurrentUserId(parsed.id || parsed.userId);
+        }
+      }
+    } catch {}
+  }, []);
   
   // Call Log Modal State
   const [activeCallLead, setActiveCallLead] = useState<Lead | null>(null);
@@ -189,13 +330,11 @@ export default function MyLeadsPage() {
   const [endDate, setEndDate] = useState("");
   const [dateTarget, setDateTarget] = useState<"ANY" | "CALL" | "VISIT" | "RECEIVED">("ANY");
 
-  const todayStr = toLocalDateString(new Date());
-  const yesterdayObj = new Date();
-  yesterdayObj.setDate(yesterdayObj.getDate() - 1);
-  const yesterdayStr = toLocalDateString(yesterdayObj);
-  const weekAgoObj = new Date();
-  weekAgoObj.setDate(weekAgoObj.getDate() - 7);
-  const weekAgoStr = toLocalDateString(weekAgoObj);
+  const todayStr = toISTDateString(new Date());
+  const yesterdayObj = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const yesterdayStr = toISTDateString(yesterdayObj);
+  const weekAgoObj = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const weekAgoStr = toISTDateString(weekAgoObj);
 
   const isDateFilterActive = datePreset !== "ALL" || Boolean(startDate) || Boolean(endDate);
 
@@ -227,12 +366,88 @@ export default function MyLeadsPage() {
   const isCallPicked = (cat?: string | null) => cat === "CALL_PICKED" || cat === "HOT" || cat === "WARM" || !cat;
   const isCallNotPicked = (cat?: string | null) => cat === "CALL_NOT_PICKED" || cat === "COLD";
 
-  // Dynamic filter logic
-  const filteredLeads = leads.filter((lead) => {
-    if (categoryFilter === "CALL_PICKED" && !isCallPicked(lead.category)) {
+  // Effective category normalized against lead funnel stage
+  const getLeadEffectiveCategory = (lead: Lead): "CALL_PICKED" | "CALL_NOT_PICKED" => {
+    if (lead.funnelStage === "CALLBACK" || lead.funnelStage === "CALL_NOT_PICKED") {
+      return "CALL_NOT_PICKED";
+    }
+    if (lead.funnelStage && lead.funnelStage !== "LOST") {
+      return "CALL_PICKED";
+    }
+    return isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED";
+  };
+
+  const matchesDateCondition = (dStr: string) => {
+    if (!dStr) return false;
+    if (datePreset === "TODAY") return dStr === todayStr;
+    if (datePreset === "YESTERDAY") return dStr === yesterdayStr;
+    if (datePreset === "LAST_7_DAYS") return dStr >= weekAgoStr && dStr <= todayStr;
+    if (datePreset === "CUSTOM") {
+      if (startDate && endDate) return dStr >= startDate && dStr <= endDate;
+      if (startDate) return dStr === startDate;
+      if (endDate) return dStr <= endDate;
+    }
+    return true;
+  };
+
+  const leadMatchesDateFilter = (lead: Lead) => {
+    if (!isDateFilterActive) return true;
+
+    if (dateTarget === "CALL") {
+      if (Array.isArray(lead.callLogs)) {
+        return lead.callLogs.some((cl) => cl.createdAt && matchesDateCondition(toISTDateString(cl.createdAt)));
+      }
       return false;
     }
-    if (categoryFilter === "CALL_NOT_PICKED" && !isCallNotPicked(lead.category)) {
+
+    if (dateTarget === "VISIT") {
+      if (Array.isArray(lead.statusHistory)) {
+        const hasStatus = lead.statusHistory.some((sh) =>
+          sh.changedAt &&
+          matchesDateCondition(toISTDateString(sh.changedAt)) &&
+          (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE")
+        );
+        if (hasStatus) return true;
+      }
+      if (Array.isArray(lead.callLogs)) {
+        const hasLog = lead.callLogs.some((cl) => {
+          if (!cl.createdAt || !matchesDateCondition(toISTDateString(cl.createdAt))) return false;
+          const notes = (cl.notes || "").toLowerCase();
+          return notes.includes("[site visit") || notes.includes("[office visit");
+        });
+        if (hasLog) return true;
+      }
+      return false;
+    }
+
+    if (dateTarget === "RECEIVED") {
+      if (lead.dateReceived && matchesDateCondition(toISTDateString(lead.dateReceived))) return true;
+      if (Array.isArray(lead.assignmentHistory)) {
+        return lead.assignmentHistory.some((ah) => ah.assignedAt && matchesDateCondition(toISTDateString(ah.assignedAt)));
+      }
+      return false;
+    }
+
+    // dateTarget === "ANY"
+    if (Array.isArray(lead.callLogs) && lead.callLogs.some((cl) => cl.createdAt && matchesDateCondition(toISTDateString(cl.createdAt)))) {
+      return true;
+    }
+    if (Array.isArray(lead.statusHistory) && lead.statusHistory.some((sh) => sh.changedAt && matchesDateCondition(toISTDateString(sh.changedAt)))) {
+      return true;
+    }
+    if (lead.dateReceived && matchesDateCondition(toISTDateString(lead.dateReceived))) return true;
+    if (Array.isArray(lead.assignmentHistory) && lead.assignmentHistory.some((ah) => ah.assignedAt && matchesDateCondition(toISTDateString(ah.assignedAt)))) {
+      return true;
+    }
+    return false;
+  };
+
+  // Dynamic filter logic
+  const filteredLeads = leads.filter((lead) => {
+    if (categoryFilter === "CALL_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_PICKED") {
+      return false;
+    }
+    if (categoryFilter === "CALL_NOT_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_NOT_PICKED") {
       return false;
     }
     if (stageFilter) {
@@ -277,99 +492,8 @@ export default function MyLeadsPage() {
     }
 
     // Date / Daily Report Filter
-    if (isDateFilterActive) {
-      const callDates: string[] = [];
-      const visitDates: string[] = [];
-      const activityDates: string[] = [];
-
-      if (Array.isArray(lead.callLogs)) {
-        for (const cl of lead.callLogs) {
-          if (cl.createdAt) {
-            const d = new Date(cl.createdAt);
-            const str = toLocalDateString(d);
-            if (str) {
-              callDates.push(str);
-              activityDates.push(str);
-              const n = (cl.notes || "").toLowerCase();
-              if (n.includes("[site visit]") || n.includes("[office visit]") || n.includes("visit")) {
-                visitDates.push(str);
-              }
-            }
-          }
-        }
-      }
-
-      if (Array.isArray(lead.statusHistory)) {
-        for (const sh of lead.statusHistory) {
-          if (sh.changedAt) {
-            const d = new Date(sh.changedAt);
-            const str = toLocalDateString(d);
-            if (str) {
-              activityDates.push(str);
-              if (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE") {
-                visitDates.push(str);
-              }
-            }
-          }
-        }
-      }
-
-      let receivedDateStr: string | null = null;
-      if (lead.dateReceived) {
-        const d = new Date(lead.dateReceived);
-        const str = toLocalDateString(d);
-        if (str) {
-          receivedDateStr = str;
-          activityDates.push(str);
-        }
-      }
-
-      const assignmentDates: string[] = [];
-      if (Array.isArray(lead.assignmentHistory)) {
-        for (const ah of lead.assignmentHistory) {
-          if (ah.assignedAt) {
-            const d = new Date(ah.assignedAt);
-            const str = toLocalDateString(d);
-            if (str) {
-              assignmentDates.push(str);
-              activityDates.push(str);
-            }
-          }
-        }
-      }
-
-      const matchesCondition = (dStr: string) => {
-        if (!dStr) return false;
-        if (datePreset === "TODAY") return dStr === todayStr;
-        if (datePreset === "YESTERDAY") return dStr === yesterdayStr;
-        if (datePreset === "LAST_7_DAYS") return dStr >= weekAgoStr && dStr <= todayStr;
-        if (datePreset === "CUSTOM") {
-          if (startDate && endDate) return dStr >= startDate && dStr <= endDate;
-          if (startDate) return dStr === startDate;
-          if (endDate) return dStr <= endDate;
-        }
-        return true;
-      };
-
-      const hasMatchingCall = callDates.some(matchesCondition);
-      const hasMatchingVisit = visitDates.some(matchesCondition);
-      const hasMatchingActivity = activityDates.some(matchesCondition);
-      const hasMatchingReceived = (receivedDateStr ? matchesCondition(receivedDateStr) : false) || assignmentDates.some(matchesCondition);
-
-      if (dateTarget === "CALL") {
-        if ((stageFilter === "SITE_VISIT_DONE" || stageFilter === "OFFICE_VISIT_DONE") && hasMatchingVisit) {
-          // Allow visit match when filtering by visit stages
-        } else if (!hasMatchingCall) {
-          return false;
-        }
-      } else if (dateTarget === "VISIT") {
-        if (!hasMatchingVisit) return false;
-      } else if (dateTarget === "RECEIVED") {
-        if (!hasMatchingReceived) return false;
-      } else {
-        // "ANY"
-        if (!hasMatchingActivity && !hasMatchingCall && !hasMatchingVisit && !hasMatchingReceived) return false;
-      }
+    if (isDateFilterActive && !leadMatchesDateFilter(lead)) {
+      return false;
     }
 
     return true;
@@ -379,39 +503,38 @@ export default function MyLeadsPage() {
   const todayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, todayStr)).length;
   const yesterdayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, yesterdayStr)).length;
 
-  const todayCallsCount = leads.reduce((sum, l) => {
-    if (!Array.isArray(l.callLogs)) return sum;
-    return sum + l.callLogs.filter(cl => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr).length;
-  }, 0);
+  const todayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, todayStr), 0);
+  const todayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, todayStr) > 0).length;
+  const todayCallsCount = todayCallsLogsCount; // Alias for UI
 
-  const todayVisitsCount = leads.filter((l) =>
-    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => {
-      if (!cl.createdAt || toLocalDateString(new Date(cl.createdAt)) !== todayStr) return false;
-      const n = (cl.notes || "").toLowerCase();
-      return n.includes("[site visit]") || n.includes("[office visit]") || n.includes("visit");
-    })) ||
-    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) =>
-      sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === todayStr &&
-      (sh.stage === "SITE_VISIT_DONE" || sh.stage === "OFFICE_VISIT_DONE")
-    ))
-  ).length;
+  const yesterdayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, yesterdayStr), 0);
+  const yesterdayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, yesterdayStr) > 0).length;
 
-  const todayActivityCount = leads.filter((l) =>
-    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === todayStr)) ||
-    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) => sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === todayStr)) ||
-    isLeadAssignedOnDate(l, todayStr)
-  ).length;
+  const todayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, todayStr)).length;
+  const yesterdayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, yesterdayStr)).length;
 
-  const yesterdayActivityCount = leads.filter((l) =>
-    (Array.isArray(l.callLogs) && l.callLogs.some((cl) => cl.createdAt && toLocalDateString(new Date(cl.createdAt)) === yesterdayStr)) ||
-    (Array.isArray(l.statusHistory) && l.statusHistory.some((sh) => sh.changedAt && toLocalDateString(new Date(sh.changedAt)) === yesterdayStr)) ||
-    isLeadAssignedOnDate(l, yesterdayStr)
-  ).length;
+  const todayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, todayStr)).length;
+  const yesterdayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, yesterdayStr)).length;
+
+  // Counts aligned to active filter targets
+  const getTodayFilterBadgeCount = () => {
+    if (dateTarget === "CALL") return todayCalledLeadsCount;
+    if (dateTarget === "VISIT") return todayVisitsCount;
+    if (dateTarget === "RECEIVED") return todayLeadsGivenCount;
+    return todayActivityCount;
+  };
+
+  const getYesterdayFilterBadgeCount = () => {
+    if (dateTarget === "CALL") return yesterdayCalledLeadsCount;
+    if (dateTarget === "VISIT") return yesterdayVisitsCount;
+    if (dateTarget === "RECEIVED") return yesterdayLeadsGivenCount;
+    return yesterdayActivityCount;
+  };
 
   // Dynamic counts for all categories & funnel stages
   const categoryCounts = {
-    CALL_PICKED: leads.filter((l) => isCallPicked(l.category)).length,
-    CALL_NOT_PICKED: leads.filter((l) => isCallNotPicked(l.category)).length,
+    CALL_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_PICKED").length,
+    CALL_NOT_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_NOT_PICKED").length,
   };
 
   const stageCounts = {
@@ -484,9 +607,14 @@ export default function MyLeadsPage() {
     };
 
     const rows = leadsToExport.map((lead) => {
+      const remarks = getLeadLatestRemarks(lead);
       const callNotesList = getLeadCallNotes(lead);
       const callNotesFormatted = callNotesList.map(c => c.date ? `[${c.date}] ${c.note}` : c.note).join(" | ");
-      const combinedNotes = callNotesFormatted || lead.formAnswers?.notes || "";
+      const combinedNotes = [
+        remarks.followUpNote ? `[Follow-up] ${remarks.followUpNote}` : "",
+        callNotesFormatted,
+        remarks.originalNote && remarks.originalNote !== remarks.followUpNote && remarks.originalNote !== callNotesFormatted ? `[Source] ${remarks.originalNote}` : ""
+      ].filter(Boolean).join(" | ");
       const lastCallInfo = getLeadLastCallDate(lead);
       const lastCallFormatted = lastCallInfo ? `${lastCallInfo.dateStr} ${lastCallInfo.timeStr || ""}`.trim() : "Not called yet";
 
@@ -498,15 +626,15 @@ export default function MyLeadsPage() {
         escapeCSV(lead.formAnswers?.occupation || ""),
         escapeCSV(lead.formAnswers?.location || ""),
         escapeCSV(lead.formAnswers?.budget || ""),
-        escapeCSV(callNotesFormatted),
+        escapeCSV(remarks.latestCallNote || callNotesFormatted),
         escapeCSV(combinedNotes),
-        escapeCSV(formatCategoryLabel(lead.category)),
+        escapeCSV(formatCategoryLabel(getLeadEffectiveCategory(lead))),
         escapeCSV(formatStageLabel(lead.funnelStage)),
         escapeCSV(lastCallFormatted),
         escapeCSV(lead.status),
-        escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN") : ""),
-        escapeCSV(lead.followUpNotes || ""),
-        escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN") : ""),
+        escapeCSV(lead.followUpAt ? new Date(lead.followUpAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : ""),
+        escapeCSV(remarks.followUpNote || lead.followUpNotes || ""),
+        escapeCSV(lead.dateReceived ? new Date(lead.dateReceived).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : ""),
       ];
     });
 
@@ -668,7 +796,8 @@ export default function MyLeadsPage() {
       const newCallLogEntry = {
         id: "temp-" + Date.now(),
         notes: cleanCallNotes || null,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        salesPersonId: currentUserId || activeCallLead.assignedToId || "",
       };
       setLeads(prev => prev.map(l => l.id === activeCallLead.id ? {
         ...l,
@@ -749,6 +878,14 @@ export default function MyLeadsPage() {
         id: "temp-" + Date.now(),
         notes: visitNote,
         createdAt: new Date().toISOString(),
+        salesPersonId: currentUserId || activeOfficeVisitLead.assignedToId || "",
+      };
+
+      const newStatusHistoryEntry = {
+        id: "temp-sh-" + Date.now(),
+        stage: "OFFICE_VISIT_DONE",
+        changedAt: new Date().toISOString(),
+        changedById: currentUserId || activeOfficeVisitLead.assignedToId || "",
       };
 
       setLeads((prev) =>
@@ -759,6 +896,7 @@ export default function MyLeadsPage() {
                 category: "CALL_PICKED",
                 funnelStage: "OFFICE_VISIT_DONE",
                 callLogs: [newCallLogEntry, ...(l.callLogs || [])],
+                statusHistory: [newStatusHistoryEntry, ...(l.statusHistory || [])],
                 followUpAt: officeVisitFollowUpAt ? new Date(officeVisitFollowUpAt).toISOString() : l.followUpAt,
                 followUpNotes: officeVisitFollowUpAt ? (officeVisitFollowUpNotes || null) : l.followUpNotes,
               }
@@ -818,12 +956,14 @@ export default function MyLeadsPage() {
         id: "temp-" + Date.now(),
         notes: visitNote,
         createdAt: new Date().toISOString(),
+        salesPersonId: currentUserId || activeSiteVisitLead.assignedToId || "",
       };
 
       const newStatusHistoryEntry = {
         id: "temp-sh-" + Date.now(),
         stage: "SITE_VISIT_DONE",
         changedAt: new Date().toISOString(),
+        changedById: currentUserId || activeSiteVisitLead.assignedToId || "",
       };
 
       setLeads((prev) =>
@@ -914,6 +1054,8 @@ export default function MyLeadsPage() {
           onClick={() => {
             setDatePreset("TODAY");
             setDateTarget("CALL");
+            setCategoryFilter("");
+            setStageFilter("");
           }}
           className="bg-surface border border-border hover:border-accent/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
           title="Click to filter leads called today"
@@ -924,9 +1066,13 @@ export default function MyLeadsPage() {
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-accent">
-              {todayCallsCount}
+              {todayCallsLogsCount}
             </span>
-            <span className="text-xs text-ink-soft font-medium">calls</span>
+            <span className="text-xs text-ink-soft font-medium">
+              {todayCallsLogsCount === todayCalledLeadsCount
+                ? "calls"
+                : `calls (${todayCalledLeadsCount} leads)`}
+            </span>
           </div>
         </div>
 
@@ -934,6 +1080,8 @@ export default function MyLeadsPage() {
           onClick={() => {
             setDatePreset("TODAY");
             setDateTarget("VISIT");
+            setCategoryFilter("");
+            setStageFilter("");
           }}
           className="bg-surface border border-border hover:border-indigo-500/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
           title="Click to filter visits today"
@@ -1113,11 +1261,11 @@ export default function MyLeadsPage() {
                 }`}
               >
                 <span>📅 Today</span>
-                {(dateTarget === "RECEIVED" ? todayLeadsGivenCount : todayActivityCount) > 0 && (
+                {getTodayFilterBadgeCount() > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     datePreset === "TODAY" ? "bg-white/20 text-white" : "bg-accent/15 text-accent"
                   }`}>
-                    {dateTarget === "RECEIVED" ? todayLeadsGivenCount : todayActivityCount}
+                    {getTodayFilterBadgeCount()}
                   </span>
                 )}
               </button>
@@ -1131,11 +1279,11 @@ export default function MyLeadsPage() {
                 }`}
               >
                 <span>Yesterday</span>
-                {yesterdayActivityCount > 0 && (
+                {getYesterdayFilterBadgeCount() > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     datePreset === "YESTERDAY" ? "bg-white/20 text-white" : "bg-ink-soft/20 text-ink-soft"
                   }`}>
-                    {yesterdayActivityCount}
+                    {getYesterdayFilterBadgeCount()}
                   </span>
                 )}
               </button>
@@ -1239,6 +1387,8 @@ export default function MyLeadsPage() {
                 setDatePreset("ALL");
                 setDateTarget("ANY");
               } else {
+                setCategoryFilter("");
+                setStageFilter("");
                 setDatePreset("TODAY");
                 setDateTarget("RECEIVED");
               }
@@ -1311,111 +1461,195 @@ export default function MyLeadsPage() {
 
           {/* Funnel Stage Chips */}
           <span className="text-border mx-1">|</span>
-          {categoryFilter !== "CALL_PICKED" && (
-            <button
-              type="button"
-              onClick={() => setStageFilter(stageFilter === "CALLBACK" ? "" : "CALLBACK")}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                stageFilter === "CALLBACK"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-              }`}
-            >
-              Callback ({stageCounts.CALLBACK})
-            </button>
-          )}
-          {categoryFilter !== "CALL_NOT_PICKED" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "FOLLOW_UP" ? "" : "FOLLOW_UP")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "FOLLOW_UP"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20"
-                }`}
-              >
-                Follow-up ({stageCounts.FOLLOW_UP})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "INTERESTED" ? "" : "INTERESTED")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "INTERESTED"
-                    ? "bg-accent text-white shadow-xs"
-                    : "bg-accent/10 text-accent hover:bg-accent/20"
-                }`}
-              >
-                Interested ({stageCounts.INTERESTED})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "DETAILS_SHARED" ? "" : "DETAILS_SHARED")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "DETAILS_SHARED"
-                    ? "bg-teal-600 text-white shadow-xs"
-                    : "bg-teal-500/10 text-teal-700 dark:text-teal-300 hover:bg-teal-500/20"
-                }`}
-              >
-                Details Shared ({stageCounts.DETAILS_SHARED})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "SITE_VISIT_DONE" ? "" : "SITE_VISIT_DONE")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "SITE_VISIT_DONE"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
-                }`}
-              >
-                Site Visit Done ({stageCounts.SITE_VISIT_DONE})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "OFFICE_VISIT_DONE" ? "" : "OFFICE_VISIT_DONE")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "OFFICE_VISIT_DONE"
-                    ? "bg-amber-600 text-white shadow-xs"
-                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-                }`}
-              >
-                Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "BOOKING_DONE" ? "" : "BOOKING_DONE")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "BOOKING_DONE"
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20"
-                }`}
-              >
-                Booking Done ({stageCounts.BOOKING_DONE})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "DEAL_CLOSED" ? "" : "DEAL_CLOSED")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "DEAL_CLOSED"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "bg-emerald-600/10 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/20"
-                }`}
-              >
-                Deal Closed ({stageCounts.DEAL_CLOSED})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter(stageFilter === "NOT_INTERESTED" ? "" : "NOT_INTERESTED")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === "NOT_INTERESTED"
-                    ? "bg-zinc-600 text-white shadow-xs"
-                    : "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-500/20"
-                }`}
-              >
-                Not Interested ({stageCounts.NOT_INTERESTED})
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "CALLBACK") {
+                setStageFilter("");
+              } else {
+                setStageFilter("CALLBACK");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "CALLBACK"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+            }`}
+          >
+            Callback ({stageCounts.CALLBACK})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "FOLLOW_UP") {
+                setStageFilter("");
+              } else {
+                setStageFilter("FOLLOW_UP");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "FOLLOW_UP"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20"
+            }`}
+          >
+            Follow-up ({stageCounts.FOLLOW_UP})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "INTERESTED") {
+                setStageFilter("");
+              } else {
+                setStageFilter("INTERESTED");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "INTERESTED"
+                ? "bg-accent text-white shadow-xs"
+                : "bg-accent/10 text-accent hover:bg-accent/20"
+            }`}
+          >
+            Interested ({stageCounts.INTERESTED})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "DETAILS_SHARED") {
+                setStageFilter("");
+              } else {
+                setStageFilter("DETAILS_SHARED");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "DETAILS_SHARED"
+                ? "bg-teal-600 text-white shadow-xs"
+                : "bg-teal-500/10 text-teal-700 dark:text-teal-300 hover:bg-teal-500/20"
+            }`}
+          >
+            Details Shared ({stageCounts.DETAILS_SHARED})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "SITE_VISIT_DONE") {
+                setStageFilter("");
+              } else {
+                setStageFilter("SITE_VISIT_DONE");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "SITE_VISIT_DONE"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20"
+            }`}
+          >
+            Site Visit Done ({stageCounts.SITE_VISIT_DONE})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "OFFICE_VISIT_DONE") {
+                setStageFilter("");
+              } else {
+                setStageFilter("OFFICE_VISIT_DONE");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "OFFICE_VISIT_DONE"
+                ? "bg-amber-600 text-white shadow-xs"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+            }`}
+          >
+            Office Visit Done ({stageCounts.OFFICE_VISIT_DONE})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "BOOKING_DONE") {
+                setStageFilter("");
+              } else {
+                setStageFilter("BOOKING_DONE");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "BOOKING_DONE"
+                ? "bg-purple-600 text-white shadow-xs"
+                : "bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20"
+            }`}
+          >
+            Booking Done ({stageCounts.BOOKING_DONE})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "DEAL_CLOSED") {
+                setStageFilter("");
+              } else {
+                setStageFilter("DEAL_CLOSED");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "DEAL_CLOSED"
+                ? "bg-emerald-700 text-white shadow-xs"
+                : "bg-emerald-600/10 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/20"
+            }`}
+          >
+            Deal Closed ({stageCounts.DEAL_CLOSED})
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (stageFilter === "NOT_INTERESTED") {
+                setStageFilter("");
+              } else {
+                setStageFilter("NOT_INTERESTED");
+                setCategoryFilter("");
+                setDatePreset("ALL");
+                setStartDate("");
+                setEndDate("");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+              stageFilter === "NOT_INTERESTED"
+                ? "bg-zinc-600 text-white shadow-xs"
+                : "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-500/20"
+            }`}
+          >
+            Not Interested ({stageCounts.NOT_INTERESTED})
+          </button>
         </div>
 
         {/* Live Filter Summary Bar */}
@@ -1597,7 +1831,17 @@ export default function MyLeadsPage() {
                         lead={lead}
                         onLeadUpdated={(updatedLead) => {
                           setLeads((prev) =>
-                            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+                            prev.map((l) =>
+                              l.id === updatedLead.id
+                                ? {
+                                    ...l,
+                                    ...updatedLead,
+                                    assignmentHistory: updatedLead.assignmentHistory || l.assignmentHistory,
+                                    statusHistory: updatedLead.statusHistory || l.statusHistory,
+                                    callLogs: updatedLead.callLogs || l.callLogs,
+                                  }
+                                : l
+                            )
                           );
                         }}
                       />
@@ -1606,16 +1850,52 @@ export default function MyLeadsPage() {
                       <div>
                         <SourceBadge source={lead.source || lead.sourceForm} />
                       </div>
-                      {lead.formAnswers?.notes && (
-                        <div className="text-[11px] text-ink/80 italic mt-1.5 max-w-xs line-clamp-2" title={lead.formAnswers.notes}>
-                          &ldquo;{lead.formAnswers.notes}&rdquo;
-                        </div>
-                      )}
+                      {(() => {
+                        const remarks = getLeadLatestRemarks(lead);
+                        const hasAny = remarks.followUpNote || remarks.latestCallNote || remarks.originalNote;
+                        if (!hasAny) {
+                          return (
+                            <div className="text-[11px] text-ink-soft/40 italic mt-1.5">
+                              No notes yet
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="space-y-1 mt-1.5 max-w-xs">
+                            {remarks.followUpNote && (
+                              <div
+                                className="text-[11px] text-amber-950 dark:text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-md flex items-start gap-1"
+                                title={`Follow-up Note: ${remarks.followUpNote}`}
+                              >
+                                <span className="font-semibold shrink-0 text-amber-700 dark:text-amber-400">Follow-up:</span>
+                                <span className="line-clamp-2 italic break-words">&ldquo;{remarks.followUpNote}&rdquo;</span>
+                              </div>
+                            )}
+                            {remarks.latestCallNote && remarks.latestCallNote !== remarks.followUpNote && (
+                              <div
+                                className="text-[11px] text-ink/85 bg-bg/70 border border-border/60 px-2 py-1 rounded-md flex items-start gap-1"
+                                title={`Latest Interaction Note: ${remarks.latestCallNote}`}
+                              >
+                                <span className="font-semibold shrink-0 text-accent">Note:</span>
+                                <span className="line-clamp-2 italic break-words">&ldquo;{remarks.latestCallNote}&rdquo;</span>
+                              </div>
+                            )}
+                            {remarks.originalNote && remarks.originalNote !== remarks.followUpNote && remarks.originalNote !== remarks.latestCallNote && (
+                              <div
+                                className="text-[10px] text-ink-soft/75 italic line-clamp-1 pl-1"
+                                title={`Original Source Note: ${remarks.originalNote}`}
+                              >
+                                Src: &ldquo;{remarks.originalNote}&rdquo;
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 align-top w-1/6">
                       <Select
                         className="w-full text-xs"
-                        value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
+                        value={getLeadEffectiveCategory(lead)}
                         onChange={(e) => updateCategory(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
@@ -1626,11 +1906,11 @@ export default function MyLeadsPage() {
                     <td className="p-4 align-top w-44">
                       <Select
                         className="w-full text-xs"
-                        value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
+                        value={lead.funnelStage || "INTERESTED"}
                         onChange={(e) => updateStage(lead.id, e.target.value)}
                         disabled={lead.status === "LOST"}
                       >
-                        {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                        {getStagesForCategory(getLeadEffectiveCategory(lead), lead.funnelStage).map((st) => (
                           <option key={st.value} value={st.value}>
                             {st.label}
                           </option>
@@ -1781,11 +2061,47 @@ export default function MyLeadsPage() {
                     <span className="text-[10px] uppercase font-semibold text-ink-soft tracking-wider">Source:</span>
                     <SourceBadge source={lead.source || lead.sourceForm} />
                   </div>
-                  {lead.formAnswers?.notes && (
-                    <div className="text-xs text-ink/80 italic line-clamp-2 bg-bg/60 px-2.5 py-1.5 rounded-lg border border-border/50 mt-0.5">
-                      &ldquo;{lead.formAnswers.notes}&rdquo;
-                    </div>
-                  )}
+                  {(() => {
+                    const remarks = getLeadLatestRemarks(lead);
+                    const hasAny = remarks.followUpNote || remarks.latestCallNote || remarks.originalNote;
+                    if (!hasAny) {
+                      return (
+                        <div className="text-[11px] text-ink-soft/40 italic">
+                          No notes yet
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-1 mt-0.5">
+                        {remarks.followUpNote && (
+                          <div
+                            className="text-[11px] text-amber-950 dark:text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5 rounded-lg flex items-start gap-1"
+                            title={`Follow-up Note: ${remarks.followUpNote}`}
+                          >
+                            <span className="font-semibold shrink-0 text-amber-700 dark:text-amber-400">Follow-up:</span>
+                            <span className="italic break-words">&ldquo;{remarks.followUpNote}&rdquo;</span>
+                          </div>
+                        )}
+                        {remarks.latestCallNote && remarks.latestCallNote !== remarks.followUpNote && (
+                          <div
+                            className="text-[11px] text-ink/85 bg-bg/70 border border-border/60 px-2.5 py-1.5 rounded-lg flex items-start gap-1"
+                            title={`Latest Interaction Note: ${remarks.latestCallNote}`}
+                          >
+                            <span className="font-semibold shrink-0 text-accent">Note:</span>
+                            <span className="italic break-words">&ldquo;{remarks.latestCallNote}&rdquo;</span>
+                          </div>
+                        )}
+                        {remarks.originalNote && remarks.originalNote !== remarks.followUpNote && remarks.originalNote !== remarks.latestCallNote && (
+                          <div
+                            className="text-[10px] text-ink-soft/75 italic line-clamp-2 px-1"
+                            title={`Original Source Note: ${remarks.originalNote}`}
+                          >
+                            Src: &ldquo;{remarks.originalNote}&rdquo;
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Lead Details: Occupation, Location, Budget */}
                   {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (
@@ -1848,7 +2164,17 @@ export default function MyLeadsPage() {
                   lead={lead}
                   onLeadUpdated={(updatedLead) => {
                     setLeads((prev) =>
-                      prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+                      prev.map((l) =>
+                        l.id === updatedLead.id
+                          ? {
+                              ...l,
+                              ...updatedLead,
+                              assignmentHistory: updatedLead.assignmentHistory || l.assignmentHistory,
+                              statusHistory: updatedLead.statusHistory || l.statusHistory,
+                              callLogs: updatedLead.callLogs || l.callLogs,
+                            }
+                          : l
+                      )
                     );
                   }}
                 />
@@ -1859,7 +2185,7 @@ export default function MyLeadsPage() {
                     <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Category</label>
                     <Select
                       className="w-full text-xs h-9 bg-bg"
-                      value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
+                      value={getLeadEffectiveCategory(lead)}
                       onChange={(e) => updateCategory(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
@@ -1871,11 +2197,11 @@ export default function MyLeadsPage() {
                     <label className="block text-[10px] font-semibold text-ink-soft uppercase tracking-wider mb-1">Stage</label>
                     <Select
                       className="w-full text-xs h-9 bg-bg"
-                      value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
+                      value={lead.funnelStage || "INTERESTED"}
                       onChange={(e) => updateStage(lead.id, e.target.value)}
                       disabled={lead.status === "LOST"}
                     >
-                      {getStagesForCategory(isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED").map((st) => (
+                      {getStagesForCategory(getLeadEffectiveCategory(lead), lead.funnelStage).map((st) => (
                         <option key={st.value} value={st.value}>
                           {st.label}
                         </option>

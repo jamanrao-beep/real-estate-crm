@@ -1,4 +1,21 @@
 const prisma = require("../prisma"); // Adjusted path
+const { recordLeadAction } = require("../utils/auditLogger");
+
+const standardLeadInclude = {
+  assignedTo: { select: { id: true, name: true, email: true } },
+  callLogs: {
+    orderBy: { createdAt: "desc" },
+    select: { id: true, notes: true, createdAt: true, salesPersonId: true, durationSecs: true },
+  },
+  statusHistory: {
+    orderBy: { changedAt: "desc" },
+    select: { id: true, stage: true, changedAt: true, changedById: true },
+  },
+  assignmentHistory: {
+    orderBy: { assignedAt: "desc" },
+    select: { assignedAt: true, assignedToId: true, assignedById: true },
+  },
+};
 
 // GET /api/leads/unassigned
 // Admin's Lead Inbox — section 4.1 of the PRD.
@@ -50,14 +67,18 @@ async function getAllLeads(req, res) {
         ...(projectFilter && { OR: projectFilter }),
       },
       include: {
-        assignedTo: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
         callLogs: {
           orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true },
+          select: { id: true, notes: true, createdAt: true, salesPersonId: true },
         },
         statusHistory: {
           orderBy: { changedAt: "desc" },
-          select: { id: true, stage: true, changedAt: true },
+          select: { id: true, stage: true, changedAt: true, changedById: true },
+        },
+        assignmentHistory: {
+          orderBy: { assignedAt: "desc" },
+          select: { assignedAt: true, assignedToId: true, assignedById: true },
         },
       },
       orderBy: { dateReceived: "desc" },
@@ -107,16 +128,16 @@ async function getMyLeads(req, res) {
       include: {
         callLogs: {
           orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true },
+          select: { id: true, notes: true, createdAt: true, salesPersonId: true },
         },
         statusHistory: {
           orderBy: { changedAt: "desc" },
-          select: { id: true, stage: true, changedAt: true },
+          select: { id: true, stage: true, changedAt: true, changedById: true },
         },
         assignmentHistory: {
           where: { assignedToId: req.user.userId },
           orderBy: { assignedAt: "desc" },
-          select: { assignedAt: true },
+          select: { assignedAt: true, assignedToId: true, assignedById: true },
         },
       },
       orderBy: { dateReceived: "desc" },
@@ -315,6 +336,7 @@ async function markLeadLost(req, res) {
       prisma.lead.update({
         where: { id },
         data: updateData,
+        include: standardLeadInclude,
       }),
       prisma.leadStatusHistory.create({
         data: {
@@ -324,6 +346,14 @@ async function markLeadLost(req, res) {
         },
       }),
     ]);
+
+    // Record permanent audit entry
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "LEAD_MARKED_LOST",
+      details: `Lead marked as LOST. Reason: "${reason ? String(reason).trim() : "No reason provided"}"`,
+    });
 
     return res.json(updatedLead);
   } catch (err) {
@@ -375,6 +405,7 @@ async function categorizeLead(req, res) {
       prisma.lead.update({
         where: { id },
         data: updateData,
+        include: standardLeadInclude,
       }),
       ...(newStage && newStage !== lead.funnelStage ? [
         prisma.leadStatusHistory.create({
@@ -386,6 +417,14 @@ async function categorizeLead(req, res) {
         }),
       ] : []),
     ]);
+
+    // Record permanent audit entry with timestamp
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "CATEGORY_CHANGED",
+      details: `Category changed from "${lead.category}" to "${category}"${newStage ? ` (Stage updated to "${newStage}")` : ""}`,
+    });
 
     return res.json(updatedLead);
   } catch (err) {
@@ -455,6 +494,7 @@ async function updateFunnelStage(req, res) {
       prisma.lead.update({
         where: { id },
         data: updateData,
+        include: standardLeadInclude,
       }),
       prisma.leadStatusHistory.create({
         data: {
@@ -464,6 +504,14 @@ async function updateFunnelStage(req, res) {
         },
       }),
     ]);
+
+    // Record permanent audit entry with timestamp
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "STAGE_CHANGED",
+      details: `Funnel stage changed from "${lead.funnelStage}" to "${stage}"${newCategory && newCategory !== lead.category ? ` (Category set to "${newCategory}")` : ""}`,
+    });
 
     if (stage === "DEAL_CLOSED") {
       const actor = await prisma.user.findUnique({ where: { id: req.user.userId } });
@@ -530,13 +578,34 @@ async function scheduleFollowUp(req, res) {
       return res.status(403).json({ error: access.message });
     }
 
+    const newFollowUpDate = followUpAt ? new Date(followUpAt) : null;
+    const newFollowUpNotes = followUpNotes !== undefined ? (followUpNotes ? followUpNotes.trim() : null) : lead.followUpNotes;
+
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
-        followUpAt: followUpAt ? new Date(followUpAt) : null,
-        followUpNotes: followUpAt ? (followUpNotes ? followUpNotes.trim() : null) : null,
+        followUpAt: newFollowUpDate,
+        followUpNotes: newFollowUpNotes,
       },
+      include: standardLeadInclude,
     });
+
+    if (newFollowUpDate) {
+      const istFollowUp = newFollowUpDate.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      await recordLeadAction({
+        leadId: id,
+        userId: req.user.userId,
+        action: "FOLLOW_UP_SCHEDULED",
+        details: `Scheduled follow-up for ${istFollowUp}${newFollowUpNotes ? ` | Note: "${newFollowUpNotes}"` : ""}`,
+      });
+    } else {
+      await recordLeadAction({
+        leadId: id,
+        userId: req.user.userId,
+        action: "FOLLOW_UP_CLEARED",
+        details: `Follow-up dismissed/cleared`,
+      });
+    }
 
     return res.json(updatedLead);
   } catch (err) {
@@ -809,7 +878,7 @@ async function addLeadNote(req, res) {
 
     const cleanNote = note.trim();
 
-    // Create CallLog record for note audit/history
+    // 1. Create CallLog record for note audit/history
     const callLog = await prisma.callLog.create({
       data: {
         leadId: id,
@@ -821,7 +890,15 @@ async function addLeadNote(req, res) {
       },
     });
 
-    // Update lead's formAnswers.callNotes
+    // 2. Also record permanent audit action with timestamp
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "NOTE_ADDED",
+      details: `Added note: "${cleanNote}"`,
+    });
+
+    // 3. Update lead's formAnswers.callNotes
     const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
     currentFormAnswers.callNotes = cleanNote;
 
@@ -830,13 +907,7 @@ async function addLeadNote(req, res) {
       data: {
         formAnswers: currentFormAnswers,
       },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-        callLogs: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true },
-        },
-      },
+      include: standardLeadInclude,
     });
 
     return res.status(201).json({ success: true, callLog, lead: updatedLead });
@@ -876,10 +947,13 @@ async function updateLeadNote(req, res) {
     const cleanNewNote = newNote.trim();
     let callLogUpdated = null;
 
-    // 1. If noteId is provided and not a temp id or formAnswers
+    // Prevent modifying system audit logs directly
     if (noteId && !noteId.startsWith("temp-") && noteId !== "formAnswers") {
       const existingCallLog = lead.callLogs.find((cl) => cl.id === noteId);
       if (existingCallLog) {
+        if (existingCallLog.notes && existingCallLog.notes.startsWith("[AUDIT:")) {
+          return res.status(403).json({ error: "Audit logs cannot be modified" });
+        }
         callLogUpdated = await prisma.callLog.update({
           where: { id: noteId },
           data: { notes: cleanNewNote },
@@ -889,7 +963,7 @@ async function updateLeadNote(req, res) {
 
     // 2. If no callLogUpdated yet, but oldNote is provided, find call log with matching text
     if (!callLogUpdated && oldNote) {
-      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === oldNote.trim());
+      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === oldNote.trim() && !cl.notes.startsWith("[AUDIT:"));
       if (match) {
         callLogUpdated = await prisma.callLog.update({
           where: { id: match.id },
@@ -897,6 +971,14 @@ async function updateLeadNote(req, res) {
         });
       }
     }
+
+    // Record permanent audit entry of the edit!
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "NOTE_EDITED",
+      details: `Edited note from "${oldNote || "previous text"}" to "${cleanNewNote}"`,
+    });
 
     // 3. Update lead formAnswers.callNotes if it was matching oldNote or is the latest note
     const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
@@ -915,13 +997,7 @@ async function updateLeadNote(req, res) {
       data: {
         formAnswers: currentFormAnswers,
       },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-        callLogs: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true },
-        },
-      },
+      include: standardLeadInclude,
     });
 
     return res.json({ success: true, lead: updatedLead, callLog: callLogUpdated });
@@ -948,14 +1024,30 @@ async function deleteLeadNote(req, res) {
       return res.status(403).json({ error: access.message });
     }
 
+    let deletedContent = note || "";
+
     if (noteId && !noteId.startsWith("temp-") && noteId !== "formAnswers") {
+      const target = lead.callLogs.find((cl) => cl.id === noteId);
+      if (target?.notes?.startsWith("[AUDIT:")) {
+        return res.status(403).json({ error: "Audit logs cannot be deleted" });
+      }
+      if (target?.notes) deletedContent = target.notes;
       await prisma.callLog.deleteMany({ where: { id: noteId, leadId: id } });
     } else if (note) {
-      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === note.trim());
+      const match = lead.callLogs.find((cl) => cl.notes && cl.notes.trim() === note.trim() && !cl.notes.startsWith("[AUDIT:"));
       if (match) {
+        deletedContent = match.notes;
         await prisma.callLog.delete({ where: { id: match.id } });
       }
     }
+
+    // Record permanent audit entry of the deletion!
+    await recordLeadAction({
+      leadId: id,
+      userId: req.user.userId,
+      action: "NOTE_DELETED",
+      details: `Deleted note content: "${deletedContent}"`,
+    });
 
     const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
     if (currentFormAnswers.callNotes && (!note || currentFormAnswers.callNotes.trim() === note.trim())) {
@@ -968,13 +1060,7 @@ async function deleteLeadNote(req, res) {
 
     const updatedLead = await prisma.lead.findUnique({
       where: { id },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-        callLogs: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true },
-        },
-      },
+      include: standardLeadInclude,
     });
 
     return res.json({ success: true, lead: updatedLead });
@@ -990,17 +1076,7 @@ async function getLeadById(req, res) {
     const { id } = req.params;
     const lead = await prisma.lead.findUnique({
       where: { id },
-      include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
-        callLogs: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, notes: true, createdAt: true, durationSecs: true },
-        },
-        statusHistory: {
-          orderBy: { changedAt: "desc" },
-          select: { id: true, stage: true, changedAt: true },
-        },
-      },
+      include: standardLeadInclude,
     });
 
     if (!lead) return res.status(404).json({ error: "Lead not found" });

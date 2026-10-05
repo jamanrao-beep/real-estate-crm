@@ -1,4 +1,5 @@
 const prisma = require("../prisma"); // Adjusted path
+const { recordLeadAction } = require("../utils/auditLogger");
 
 // POST /api/calls   body: { leadId, startTime, endTime, notes }
 // PRD 5.4 — Sales Person logs a call against a lead.
@@ -58,11 +59,18 @@ async function logCall(req, res) {
       data: {
         formAnswers: currentFormAnswers,
         ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
-        ...(followUpDate && {
-          followUpAt: followUpDate,
-          followUpNotes: cleanFollowUpNotes,
-        }),
+        ...(followUpDate ? { followUpAt: followUpDate } : {}),
+        ...(cleanFollowUpNotes ? { followUpNotes: cleanFollowUpNotes } : {}),
       },
+    });
+
+    // Log immutable audit record with timestamp
+    const istFollowUpStr = followUpDate ? followUpDate.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : null;
+    await recordLeadAction({
+      leadId,
+      userId: req.user.userId,
+      action: "CALL_LOGGED",
+      details: `Call recorded. Notes: "${notes || "No call notes"}" | Duration: ${durationSecs}s${istFollowUpStr ? ` | Follow-up: ${istFollowUpStr}` : ""}${cleanFollowUpNotes ? ` (To ask: "${cleanFollowUpNotes}")` : ""}`,
     });
 
     return res.status(201).json(callLog);

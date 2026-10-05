@@ -42,7 +42,7 @@ function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
   const list: { note: string; date?: string }[] = [];
   if (Array.isArray(lead.callLogs)) {
     for (const cl of lead.callLogs) {
-      if (cl.notes && cl.notes.trim()) {
+      if (cl.notes && cl.notes.trim() && !cl.notes.trim().startsWith("[AUDIT:")) {
         list.push({
           note: cl.notes.trim(),
           date: cl.createdAt ? new Date(cl.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : undefined
@@ -50,13 +50,46 @@ function getLeadCallNotes(lead: Lead): { note: string; date?: string }[] {
       }
     }
   }
-  if (lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim()) {
+  if (lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim() && !lead.formAnswers.callNotes.trim().startsWith("[AUDIT:")) {
     const cn = lead.formAnswers.callNotes.trim();
     if (!list.some(item => item.note === cn)) {
       list.unshift({ note: cn });
     }
   }
   return list;
+}
+
+// Retrieves all relevant latest remarks for display in Source & Notes
+function getLeadLatestRemarks(lead: Lead): {
+  followUpNote?: string | null;
+  latestCallNote?: string | null;
+  originalNote?: string | null;
+} {
+  const followUpNote = lead.followUpNotes?.trim() || null;
+
+  let latestCallNote: string | null = null;
+  if (Array.isArray(lead.callLogs) && lead.callLogs.length > 0) {
+    const sorted = [...lead.callLogs]
+      .filter((cl) => cl.notes && cl.notes.trim() && !cl.notes.trim().startsWith("[AUDIT:"))
+      .sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+    if (sorted.length > 0 && sorted[0].notes) {
+      latestCallNote = sorted[0].notes.trim();
+    }
+  }
+
+  if (!latestCallNote && lead.formAnswers?.callNotes && typeof lead.formAnswers.callNotes === "string" && lead.formAnswers.callNotes.trim() && !lead.formAnswers.callNotes.trim().startsWith("[AUDIT:")) {
+    latestCallNote = lead.formAnswers.callNotes.trim();
+  }
+
+  const originalNote = typeof lead.formAnswers?.notes === "string" && lead.formAnswers.notes.trim()
+    ? lead.formAnswers.notes.trim()
+    : null;
+
+  return { followUpNote, latestCallNote, originalNote };
 }
 
 function formatFollowUpDate(dateStr: string) {
@@ -563,20 +596,66 @@ export default function AllLeadsPage() {
                         lead={lead}
                         onLeadUpdated={(updatedLead) => {
                           setLeads((prev) =>
-                            prev.map((l) => (l.id === updatedLead.id ? { ...l, ...updatedLead } : l))
+                            prev.map((l) =>
+                              l.id === updatedLead.id
+                                ? {
+                                    ...l,
+                                    ...updatedLead,
+                                    assignmentHistory: (updatedLead as any).assignmentHistory || (l as any).assignmentHistory,
+                                    statusHistory: (updatedLead as any).statusHistory || (l as any).statusHistory,
+                                    callLogs: updatedLead.callLogs || l.callLogs,
+                                  }
+                                : l
+                            )
                           );
                         }}
                       />
                     </td>
-                    <td className="p-4 align-top">
+                    <td className="p-4 align-top w-1/5">
                       <div>
                         <SourceBadge source={lead.source} />
                       </div>
-                      {lead.formAnswers?.notes && (
-                        <div className="text-[11px] text-ink/80 italic mt-1 max-w-xs line-clamp-2" title={lead.formAnswers.notes}>
-                          &ldquo;{lead.formAnswers.notes}&rdquo;
-                        </div>
-                      )}
+                      {(() => {
+                        const remarks = getLeadLatestRemarks(lead);
+                        const hasAny = remarks.followUpNote || remarks.latestCallNote || remarks.originalNote;
+                        if (!hasAny) {
+                          return (
+                            <div className="text-[11px] text-ink-soft/40 italic mt-1.5">
+                              No remarks yet
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="space-y-1.5 mt-1.5">
+                            {remarks.followUpNote && (
+                              <div
+                                className="text-[11px] text-amber-950 dark:text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-md flex items-start gap-1"
+                                title={`Follow-up Note: ${remarks.followUpNote}`}
+                              >
+                                <span className="font-semibold shrink-0 text-amber-700 dark:text-amber-400">Follow-up:</span>
+                                <span className="line-clamp-2 italic break-words">&ldquo;{remarks.followUpNote}&rdquo;</span>
+                              </div>
+                            )}
+                            {remarks.latestCallNote && remarks.latestCallNote !== remarks.followUpNote && (
+                              <div
+                                className="text-[11px] text-ink/85 bg-bg/70 border border-border/60 px-2 py-1 rounded-md flex items-start gap-1"
+                                title={`Latest Interaction Note: ${remarks.latestCallNote}`}
+                              >
+                                <span className="font-semibold shrink-0 text-accent">Note:</span>
+                                <span className="line-clamp-2 italic break-words">&ldquo;{remarks.latestCallNote}&rdquo;</span>
+                              </div>
+                            )}
+                            {remarks.originalNote && remarks.originalNote !== remarks.followUpNote && remarks.originalNote !== remarks.latestCallNote && (
+                              <div
+                                className="text-[10px] text-ink-soft/75 italic line-clamp-1 pl-1"
+                                title={`Original Source Note: ${remarks.originalNote}`}
+                              >
+                                Src: &ldquo;{remarks.originalNote}&rdquo;
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 align-top">
                       {lead.assignedTo ? (
@@ -680,11 +759,47 @@ export default function AllLeadsPage() {
                   <span className="text-[10px] uppercase font-semibold text-ink-soft tracking-wider">Source:</span>
                   <SourceBadge source={lead.source} />
                 </div>
-                {lead.formAnswers?.notes && (
-                  <div className="text-xs text-ink/80 italic line-clamp-2 bg-bg/60 px-2.5 py-1.5 rounded-lg border border-border/50 mt-0.5">
-                    &ldquo;{lead.formAnswers.notes}&rdquo;
-                  </div>
-                )}
+                {(() => {
+                  const remarks = getLeadLatestRemarks(lead);
+                  const hasAny = remarks.followUpNote || remarks.latestCallNote || remarks.originalNote;
+                  if (!hasAny) {
+                    return (
+                      <div className="text-[11px] text-ink-soft/40 italic">
+                        No notes yet
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-1 mt-0.5">
+                      {remarks.followUpNote && (
+                        <div
+                          className="text-[11px] text-amber-950 dark:text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5 rounded-lg flex items-start gap-1"
+                          title={`Follow-up Note: ${remarks.followUpNote}`}
+                        >
+                          <span className="font-semibold shrink-0 text-amber-700 dark:text-amber-400">Follow-up:</span>
+                          <span className="italic break-words">&ldquo;{remarks.followUpNote}&rdquo;</span>
+                        </div>
+                      )}
+                      {remarks.latestCallNote && remarks.latestCallNote !== remarks.followUpNote && (
+                        <div
+                          className="text-[11px] text-ink/85 bg-bg/70 border border-border/60 px-2.5 py-1.5 rounded-lg flex items-start gap-1"
+                          title={`Latest Interaction Note: ${remarks.latestCallNote}`}
+                        >
+                          <span className="font-semibold shrink-0 text-accent">Note:</span>
+                          <span className="italic break-words">&ldquo;{remarks.latestCallNote}&rdquo;</span>
+                        </div>
+                      )}
+                      {remarks.originalNote && remarks.originalNote !== remarks.followUpNote && remarks.originalNote !== remarks.latestCallNote && (
+                        <div
+                          className="text-[10px] text-ink-soft/75 italic line-clamp-2 px-1"
+                          title={`Original Source Note: ${remarks.originalNote}`}
+                        >
+                          Src: &ldquo;{remarks.originalNote}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Lead Details: Occupation, Location, Budget */}
                 {(lead.formAnswers?.occupation || lead.formAnswers?.location || lead.formAnswers?.budget) && (

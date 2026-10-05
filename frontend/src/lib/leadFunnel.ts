@@ -33,11 +33,18 @@ export const ALL_FUNNEL_STAGES = [
  * If category is "CALL_NOT_PICKED", returns ONLY Callback.
  * If category is "CALL_PICKED", returns ONLY the 8 Call Picked stages.
  */
-export function getStagesForCategory(category?: string | null): readonly FunnelStageOption[] {
-  if (category === "CALL_NOT_PICKED") {
-    return STAGES_CALL_NOT_PICKED;
+export function getStagesForCategory(
+  category?: string | null,
+  currentStage?: string | null
+): readonly FunnelStageOption[] {
+  const baseStages: FunnelStageOption[] = category === "CALL_NOT_PICKED" ? [...STAGES_CALL_NOT_PICKED] : [...STAGES_CALL_PICKED];
+  if (currentStage && !baseStages.some((s) => s.value === currentStage)) {
+    const found = ALL_FUNNEL_STAGES.find((s) => s.value === currentStage);
+    if (found) {
+      baseStages.unshift(found);
+    }
   }
-  return STAGES_CALL_PICKED;
+  return baseStages;
 }
 
 /**
