@@ -4,14 +4,34 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
-import { LogOut, Briefcase, IndianRupee, ReceiptIndianRupee, Menu, X } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import api from "@/lib/api";
+import { LogOut, Briefcase, IndianRupee, ReceiptIndianRupee, CalendarClock, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [todayFollowUpCount, setTodayFollowUpCount] = useState<number>(0);
+
+  const fetchFollowUpCount = useCallback(async () => {
+    try {
+      const res = await api.get("/leads/follow-ups", { params: { date: "today" } });
+      if (res.data?.summary) {
+        const pendingToday = Math.max(0, (res.data.summary.totalToday || 0) - (res.data.summary.completedToday || 0));
+        setTodayFollowUpCount(pendingToday);
+      }
+    } catch {
+      // Ignore background count error
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFollowUpCount();
+    const interval = setInterval(fetchFollowUpCount, 60000);
+    return () => clearInterval(interval);
+  }, [fetchFollowUpCount]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -21,6 +41,12 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { name: "My Leads", href: "/sales/leads", icon: Briefcase },
+    {
+      name: "Today's Follow-ups",
+      href: "/sales/follow-ups",
+      icon: CalendarClock,
+      badge: todayFollowUpCount,
+    },
     { name: "Deals & Payments", href: "/sales/deals", icon: IndianRupee },
     { name: "My Transactions", href: "/sales/transactions", icon: ReceiptIndianRupee },
   ];
@@ -74,7 +100,7 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
                       key={item.name}
                       href={item.href}
                       className={cn(
-                        "inline-flex items-center gap-2 px-3 py-1.5 lg:px-3.5 lg:py-2 rounded-xl text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap",
+                        "inline-flex items-center gap-2 px-3 py-1.5 lg:px-3.5 lg:py-2 rounded-xl text-xs lg:text-sm font-semibold transition-all duration-150 whitespace-nowrap relative",
                         isActive
                           ? "bg-ink text-surface shadow-xs"
                           : "text-ink-soft hover:text-ink hover:bg-bg/80"
@@ -82,6 +108,11 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
                     >
                       <item.icon size={16} className={cn("transition-colors", isActive ? "text-accent" : "text-ink-soft")} />
                       <span>{item.name}</span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white shadow-2xs animate-pulse">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -153,14 +184,21 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
+                      "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
                       isActive
                         ? "bg-ink text-surface"
                         : "text-ink hover:bg-bg"
                     )}
                   >
-                    <item.icon size={18} className={cn("shrink-0", isActive ? "text-accent" : "text-ink-soft")} />
-                    <span>{item.name}</span>
+                    <div className="flex items-center gap-3">
+                      <item.icon size={18} className={cn("shrink-0", isActive ? "text-accent" : "text-ink-soft")} />
+                      <span>{item.name}</span>
+                    </div>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white shadow-2xs">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -194,14 +232,21 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
               key={item.name}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-medium transition-all duration-150",
+                "flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-medium transition-all duration-150 relative",
                 isActive
                   ? "text-ink font-bold bg-accent/15"
                   : "text-ink-soft hover:text-ink"
               )}
             >
-              <item.icon size={18} className={isActive ? "text-accent stroke-[2.5]" : "stroke-[1.75]"} />
-              <span className="mt-0.5 whitespace-nowrap">{item.name}</span>
+              <div className="relative">
+                <item.icon size={18} className={isActive ? "text-accent stroke-[2.5]" : "stroke-[1.75]"} />
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full text-[8px] font-bold bg-amber-500 text-white min-w-[14px] text-center">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className="mt-0.5 whitespace-nowrap text-[9px]">{item.name}</span>
             </Link>
           );
         })}

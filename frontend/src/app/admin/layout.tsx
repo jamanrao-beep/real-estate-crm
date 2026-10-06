@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import api from "@/lib/api";
-import { LogOut, Users, Inbox, Activity, CreditCard, Bell, Briefcase, Menu, X } from "lucide-react";
+import { LogOut, Users, Inbox, Activity, CreditCard, Bell, Briefcase, CalendarClock, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +15,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [todayFollowUpCount, setTodayFollowUpCount] = useState<number>(0);
   const notificationRef = useRef<HTMLDivElement>(null);
 
   // Close mobile menu on route change
@@ -47,11 +48,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, []);
 
+  const fetchFollowUpCount = useCallback(async () => {
+    try {
+      const res = await api.get("/leads/follow-ups", { params: { date: "today" } });
+      if (res.data?.summary) {
+        const pendingToday = Math.max(0, (res.data.summary.totalToday || 0) - (res.data.summary.completedToday || 0));
+        setTodayFollowUpCount(pendingToday);
+      }
+    } catch {
+      // Ignore background count error
+    }
+  }, []);
+
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    fetchFollowUpCount();
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchFollowUpCount();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, fetchFollowUpCount]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -67,6 +84,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: "Inbox", href: "/admin/leads/unassigned", icon: Inbox },
     { name: "All Leads", href: "/admin/leads", icon: Users },
+    {
+      name: "Today's Follow-ups",
+      href: "/admin/follow-ups",
+      icon: CalendarClock,
+      badge: todayFollowUpCount,
+    },
     { name: "Performance", href: "/admin/performance", icon: Activity },
     { name: "Deals", href: "/admin/deals", icon: Briefcase },
     { name: "Transactions", href: "/admin/transactions", icon: CreditCard },
@@ -136,6 +159,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         className={cn("transition-colors", isActive ? "text-accent" : "text-ink-soft")} 
                       />
                       <span>{item.name}</span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white shadow-2xs animate-pulse">
+                          {item.badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -263,14 +291,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
+                      "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
                       isActive
                         ? "bg-ink text-surface"
                         : "text-ink hover:bg-bg"
                     )}
                   >
-                    <item.icon size={18} className={cn("shrink-0", isActive ? "text-accent" : "text-ink-soft")} />
-                    <span>{item.name}</span>
+                    <div className="flex items-center gap-3">
+                      <item.icon size={18} className={cn("shrink-0", isActive ? "text-accent" : "text-ink-soft")} />
+                      <span>{item.name}</span>
+                    </div>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white shadow-2xs">
+                        {item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -304,14 +339,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               key={item.name}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center py-1.5 px-3 rounded-xl text-[10px] font-medium transition-all duration-150",
+                "flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[10px] font-medium transition-all duration-150 relative",
                 isActive
                   ? "text-ink font-bold bg-accent/15"
                   : "text-ink-soft hover:text-ink"
               )}
             >
-              <item.icon size={18} className={isActive ? "text-accent stroke-[2.5]" : "stroke-[1.75]"} />
-              <span className="mt-0.5 whitespace-nowrap">{item.name}</span>
+              <div className="relative">
+                <item.icon size={18} className={isActive ? "text-accent stroke-[2.5]" : "stroke-[1.75]"} />
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full text-[8px] font-bold bg-amber-500 text-white min-w-[14px] text-center">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className="mt-0.5 whitespace-nowrap text-[9px]">{item.name}</span>
             </Link>
           );
         })}
