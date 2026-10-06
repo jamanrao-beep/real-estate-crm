@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2, MapPin } from "lucide-react";
+import Link from "next/link";
+import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2, MapPin, ArrowRight, CalendarClock } from "lucide-react";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
 import { LeadNotesBox } from "@/components/LeadNotesBox";
@@ -323,6 +324,7 @@ export default function MyLeadsPage() {
   const [stageFilter, setStageFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState<"ALL" | "TODAY">("ALL");
 
   // Date Filter State for Daily Reports
   const [datePreset, setDatePreset] = useState<"ALL" | "TODAY" | "YESTERDAY" | "LAST_7_DAYS" | "CUSTOM">("ALL");
@@ -349,6 +351,7 @@ export default function MyLeadsPage() {
     setStageFilter("");
     setSourceFilter("ALL");
     setSearchQuery("");
+    setFollowUpFilter("ALL");
     setDatePreset("ALL");
     setStartDate("");
     setEndDate("");
@@ -360,7 +363,8 @@ export default function MyLeadsPage() {
     stageFilter ||
     (sourceFilter && sourceFilter !== "ALL") ||
     searchQuery.trim() ||
-    isDateFilterActive
+    isDateFilterActive ||
+    followUpFilter !== "ALL"
   );
 
   const isCallPicked = (cat?: string | null) => cat === "CALL_PICKED" || cat === "HOT" || cat === "WARM" || !cat;
@@ -444,6 +448,12 @@ export default function MyLeadsPage() {
 
   // Dynamic filter logic
   const filteredLeads = leads.filter((lead) => {
+    if (followUpFilter === "TODAY") {
+      if (!lead.followUpAt || toISTDateString(lead.followUpAt) !== todayStr) {
+        return false;
+      }
+    }
+
     if (categoryFilter === "CALL_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_PICKED") {
       return false;
     }
@@ -515,6 +525,8 @@ export default function MyLeadsPage() {
 
   const todayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, todayStr)).length;
   const yesterdayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, yesterdayStr)).length;
+
+  const todayFollowUpsCount = leads.filter((l) => l.followUpAt && toISTDateString(l.followUpAt) === todayStr).length;
 
   // Counts aligned to active filter targets
   const getTodayFilterBadgeCount = () => {
@@ -1024,14 +1036,61 @@ export default function MyLeadsPage() {
         </div>
       </div>
 
+      {/* Today's Follow-up Alert Banner */}
+      {todayFollowUpsCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-orange-500/15 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Clock size={20} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-ink">Today&apos;s Follow-ups Scheduled</h3>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500 text-white shadow-2xs">
+                  {todayFollowUpsCount} {todayFollowUpsCount === 1 ? "lead" : "leads"}
+                </span>
+              </div>
+              <p className="text-xs text-ink-soft mt-0.5">
+                You have {todayFollowUpsCount} scheduled follow-up calls for today ({todayStr}). Click below to review and call them!
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (followUpFilter === "TODAY") {
+                  setFollowUpFilter("ALL");
+                } else {
+                  resetFilters();
+                  setFollowUpFilter("TODAY");
+                }
+              }}
+              className="text-xs h-8 border-amber-500/40 text-amber-800 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 font-semibold"
+            >
+              {followUpFilter === "TODAY" ? "Show All Leads" : "Filter in Table"}
+            </Button>
+            <Link
+              href="/sales/follow-ups"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-colors"
+            >
+              <span>Follow-ups Workspace</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Daily Performance KPI Summary Banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div
           onClick={() => {
             setDatePreset("TODAY");
             setDateTarget("RECEIVED");
             setCategoryFilter("");
             setStageFilter("");
+            setFollowUpFilter("ALL");
           }}
           className="bg-surface border border-border hover:border-emerald-500/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
           title="Click to filter leads given to you today"
@@ -1056,6 +1115,7 @@ export default function MyLeadsPage() {
             setDateTarget("CALL");
             setCategoryFilter("");
             setStageFilter("");
+            setFollowUpFilter("ALL");
           }}
           className="bg-surface border border-border hover:border-accent/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
           title="Click to filter leads called today"
@@ -1082,6 +1142,7 @@ export default function MyLeadsPage() {
             setDateTarget("VISIT");
             setCategoryFilter("");
             setStageFilter("");
+            setFollowUpFilter("ALL");
           }}
           className="bg-surface border border-border hover:border-indigo-500/50 p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group"
           title="Click to filter visits today"
@@ -1095,6 +1156,36 @@ export default function MyLeadsPage() {
               {todayVisitsCount}
             </span>
             <span className="text-xs text-ink-soft font-medium">site / office</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => {
+            if (followUpFilter === "TODAY") {
+              setFollowUpFilter("ALL");
+            } else {
+              resetFilters();
+              setFollowUpFilter("TODAY");
+            }
+          }}
+          className={`bg-surface border p-3 sm:p-3.5 rounded-xl shadow-xs cursor-pointer transition-all hover:shadow-sm group ${
+            followUpFilter === "TODAY"
+              ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500"
+              : "border-border hover:border-amber-500/50"
+          }`}
+          title="Click to filter today's scheduled follow-ups"
+        >
+          <div className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <CalendarClock size={12} className="text-amber-500" />
+              Follow-ups Today
+            </span>
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-bold text-amber-600 dark:text-amber-400">
+              {todayFollowUpsCount}
+            </span>
+            <span className="text-xs text-ink-soft font-medium">scheduled</span>
           </div>
         </div>
 
@@ -1401,6 +1492,27 @@ export default function MyLeadsPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Given Today ({todayLeadsGivenCount})
+          </button>
+
+          {/* Today's Follow-ups Quick Chip */}
+          <button
+            type="button"
+            onClick={() => {
+              if (followUpFilter === "TODAY") {
+                setFollowUpFilter("ALL");
+              } else {
+                resetFilters();
+                setFollowUpFilter("TODAY");
+              }
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+              followUpFilter === "TODAY"
+                ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                : "border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+            }`}
+          >
+            <Clock size={12} className={followUpFilter === "TODAY" ? "text-white" : "text-amber-500"} />
+            Today&apos;s Follow-ups ({todayFollowUpsCount})
           </button>
 
           {/* Project Chips */}
