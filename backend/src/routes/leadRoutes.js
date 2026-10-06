@@ -6,6 +6,7 @@ const {
   getAllLeads,
   getMyLeads,
   getLeadById,
+  getTodayFollowUps,
   assignLead,
   autoAssignLeads,
   markLeadLost,
@@ -29,6 +30,9 @@ router.post("/", requireAuth, createLead);
 router.post("/sync-sheet", requireAuth, adminOnly, syncSheetLeads);
 router.post("/webhook", receiveWebhookLead);
 router.post("/import-bulk", requireAuth, adminOnly, importBulkLeads);
+
+// Follow-ups endpoints (Dedicated workspace - Sales Person gets their own; Admin gets team-wide)
+router.get("/follow-ups", requireAuth, getTodayFollowUps);
 
 // Admin-only endpoints
 router.get("/unassigned", requireAuth, adminOnly, getUnassignedLeads);

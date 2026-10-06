@@ -1093,12 +1093,127 @@ async function getLeadById(req, res) {
   }
 }
 
+// Helper for IST date string (YYYY-MM-DD)
+function toISTDateString(d) {
+  if (!d) return "";
+  const dateObj = typeof d === "string" ? new Date(d) : d;
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dateObj);
+}
+
+// GET /api/leads/follow-ups (Dedicated Today's Follow-ups Workspace)
+async function getTodayFollowUps(req, res) {
+  try {
+    const { date, status, salesPersonId, search } = req.query;
+    const now = new Date();
+    const todayIST = toISTDateString(now);
+
+    // Ownership filter: Sales reps only see their own; Admin sees all or filtered by salesPersonId
+    const isSalesPerson = req.user.role === "SALES_PERSON";
+    const targetUserId = isSalesPerson ? req.user.userId : (salesPersonId || undefined);
+
+    const leads = await prisma.lead.findMany({
+      where: {
+        status: "ACTIVE",
+        followUpAt: { not: null },
+        ...(targetUserId && { assignedToId: targetUserId }),
+        ...(search && {
+          OR: [
+            { name: { contains: search } },
+            { phone: { contains: search } },
+            { followUpNotes: { contains: search } },
+          ],
+        }),
+      },
+      include: standardLeadInclude,
+      orderBy: { followUpAt: "asc" },
+    });
+
+    // Compute status for each lead
+    const enrichedLeads = leads.map((lead) => {
+      const followUpDateObj = new Date(lead.followUpAt);
+      const followUpIST = toISTDateString(followUpDateObj);
+      const isToday = followUpIST === todayIST;
+      const isPastDay = followUpIST < todayIST;
+
+      // Check if call was logged today (or on followUp date)
+      const hasCallLogged = Array.isArray(lead.callLogs) && lead.callLogs.some((cl) => {
+        if (!cl.createdAt) return false;
+        if (cl.notes && cl.notes.startsWith("[AUDIT:")) return false;
+        const callIST = toISTDateString(cl.createdAt);
+        return callIST === followUpIST || new Date(cl.createdAt) >= followUpDateObj;
+      });
+
+      let followUpStatus = "UPCOMING";
+      if (hasCallLogged) {
+        followUpStatus = "COMPLETED";
+      } else if (followUpDateObj.getTime() < now.getTime()) {
+        followUpStatus = "OVERDUE";
+      }
+
+      return {
+        ...lead,
+        isToday,
+        isPastDay,
+        followUpStatus,
+      };
+    });
+
+    // Calculate summary statistics
+    const totalToday = enrichedLeads.filter((l) => l.isToday).length;
+    const completedToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "COMPLETED").length;
+    const overdueToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "OVERDUE").length;
+    const upcomingToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "UPCOMING").length;
+    const allOverdue = enrichedLeads.filter((l) => l.followUpStatus === "OVERDUE").length;
+
+    // Filter according to request status/date
+    let filtered = enrichedLeads;
+    if (status === "COMPLETED") {
+      filtered = enrichedLeads.filter((l) => l.followUpStatus === "COMPLETED" && (date === "all" ? true : l.isToday));
+    } else if (status === "OVERDUE") {
+      filtered = enrichedLeads.filter((l) => l.followUpStatus === "OVERDUE" && (date === "all" ? true : l.isToday));
+    } else if (status === "UPCOMING") {
+      filtered = enrichedLeads.filter((l) => l.followUpStatus === "UPCOMING" && (date === "all" ? true : l.isToday));
+    } else if (status === "ALL_PENDING") {
+      filtered = enrichedLeads.filter((l) => l.followUpStatus !== "COMPLETED");
+    } else if (status === "ALL_OVERDUE") {
+      filtered = enrichedLeads.filter((l) => l.followUpStatus === "OVERDUE");
+    } else {
+      // Default: Today's follow-ups
+      if (date !== "all") {
+        filtered = enrichedLeads.filter((l) => l.isToday);
+      }
+    }
+
+    return res.json({
+      leads: filtered,
+      summary: {
+        totalToday,
+        completedToday,
+        overdueToday,
+        upcomingToday,
+        allOverdue,
+        todayIST,
+      },
+    });
+  } catch (err) {
+    console.error("Failed to fetch follow-ups:", err);
+    return res.status(500).json({ error: "Failed to fetch follow-ups: " + err.message });
+  }
+}
+
 module.exports = {
   createLead,
   getUnassignedLeads,
   getAllLeads,
   getMyLeads,
   getLeadById,
+  getTodayFollowUps,
   assignLead,
   autoAssignLeads,
   markLeadLost,
