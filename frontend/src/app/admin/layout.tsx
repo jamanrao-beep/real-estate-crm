@@ -26,16 +26,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Click outside listener for notification dropdown
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
     };
     if (showNotifications) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [showNotifications]);
 
@@ -193,15 +195,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 {/* Notifications Popover */}
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2.5 w-80 sm:w-88 bg-surface/98 backdrop-blur-md border border-border rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
-                    <div className="p-3.5 border-b border-border bg-bg/50 flex justify-between items-center">
+                  <div className="fixed inset-x-3 top-[68px] max-w-md mx-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2.5 sm:w-88 sm:max-w-none sm:mx-0 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+                    <div className="p-3.5 border-b border-border bg-bg flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <Bell size={15} className="text-accent" />
                         <h3 className="font-semibold text-xs text-ink uppercase tracking-wider">Notifications</h3>
                       </div>
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-accent/15 text-accent font-semibold border border-accent/20">
-                        {notifications.length} unread
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-accent/15 text-accent font-semibold border border-accent/20">
+                          {notifications.length} unread
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowNotifications(false);
+                          }}
+                          className="text-ink-soft hover:text-ink p-1 rounded-lg hover:bg-surface transition-colors"
+                          aria-label="Close notifications"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
                     <div className="max-h-[320px] overflow-y-auto divide-y divide-border/60">
                       {notifications.length === 0 ? (
@@ -216,7 +231,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             onClick={() => markAsRead(n.id)}
                             className="p-3.5 hover:bg-bg/60 cursor-pointer transition-colors space-y-1"
                           >
-                            <p className="text-xs text-ink leading-snug">{n.message}</p>
+                            <p className="text-xs text-ink leading-snug break-words">{n.message}</p>
                             <span className="text-[10px] font-mono text-ink-soft block">
                               {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
