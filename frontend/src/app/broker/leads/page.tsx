@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, XCircle, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
 import { getStagesForCategory } from "@/lib/leadFunnel";
 
@@ -83,7 +83,7 @@ export default function MyLeadsPage() {
       let nextCategory = lead?.category;
       if (stage === "CALLBACK") {
         nextCategory = "CALL_NOT_PICKED";
-      } else if (stage !== "LOST") {
+      } else {
         nextCategory = "CALL_PICKED";
       }
 
@@ -102,17 +102,6 @@ export default function MyLeadsPage() {
     } catch (err) {
       console.error("Failed to update stage", err);
       alert("Failed to update funnel stage");
-    }
-  };
-
-  const markLost = async (id: string) => {
-    if (!confirm("Are you sure you want to mark this lead as LOST?")) return;
-    try {
-      await api.patch(`/leads/${id}/lost`, {});
-      setLeads(leads.map(l => l.id === id ? { ...l, status: "LOST", funnelStage: "LOST" } : l));
-    } catch (err: any) {
-      console.error("Failed to mark lost", err);
-      alert(err.response?.data?.error || "Failed to mark lead as lost");
     }
   };
 
@@ -171,21 +160,18 @@ export default function MyLeadsPage() {
                 <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider">
                   Funnel Stage
                 </th>
-                <th className="p-4 text-xs font-semibold text-ink-soft uppercase tracking-wider text-right">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-ink-soft">
+                  <td colSpan={3} className="p-8 text-center text-ink-soft">
                     Loading your leads...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
+                  <td colSpan={3} className="p-8 text-center text-ink-soft flex items-center justify-center gap-2">
                     <Search size={16} /> No leads assigned to you right now.
                   </td>
                 </tr>
@@ -203,7 +189,7 @@ export default function MyLeadsPage() {
                       </div>
                       <div className="text-sm text-ink-soft">{lead.email}</div>
                     </td>
-                    <td className="p-4 align-top w-1/5">
+                    <td className="p-4 align-top w-1/3">
                       <Select
                         className="w-full text-xs"
                         value={isCallNotPicked(lead.category) ? "CALL_NOT_PICKED" : "CALL_PICKED"}
@@ -214,7 +200,7 @@ export default function MyLeadsPage() {
                         <option value="CALL_NOT_PICKED">Call Not Picked 📵</option>
                       </Select>
                     </td>
-                    <td className="p-4 align-top w-1/4">
+                    <td className="p-4 align-top w-1/3">
                       <Select
                         className="w-full text-xs"
                         value={lead.funnelStage || (isCallNotPicked(lead.category) ? "CALLBACK" : "FOLLOW_UP")}
@@ -227,20 +213,6 @@ export default function MyLeadsPage() {
                           </option>
                         ))}
                       </Select>
-                    </td>
-                    <td className="p-4 align-top text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-danger hover:bg-danger/10 hover:text-danger"
-                          onClick={() => markLost(lead.id)}
-                          disabled={lead.status === "LOST"}
-                        >
-                          <XCircle size={14} className="mr-1.5" />
-                          Lost
-                        </Button>
-                      </div>
                     </td>
                   </tr>
                 ))
@@ -272,17 +244,6 @@ export default function MyLeadsPage() {
                     </div>
                     {lead.email && <div className="text-xs text-ink-soft/80">{lead.email}</div>}
                   </div>
-                  {lead.status !== "LOST" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-danger hover:bg-danger/10 hover:text-danger h-8 px-2 text-xs"
-                      onClick={() => markLost(lead.id)}
-                    >
-                      <XCircle size={14} className="mr-1" />
-                      Lost
-                    </Button>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">

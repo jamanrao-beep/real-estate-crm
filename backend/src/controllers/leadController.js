@@ -451,7 +451,6 @@ async function updateFunnelStage(req, res) {
       "BOOKING_DONE",
       "DEAL_CLOSED",
       "CALL_NOT_PICKED",
-      "LOST",
     ];
 
     if (!ALLOWED_STAGES.includes(stage)) {

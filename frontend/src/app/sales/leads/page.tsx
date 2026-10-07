@@ -755,7 +755,7 @@ export default function MyLeadsPage() {
       let nextCategory = lead?.category;
       if (stage === "CALLBACK") {
         nextCategory = "CALL_NOT_PICKED";
-      } else if (stage !== "LOST") {
+      } else {
         nextCategory = "CALL_PICKED";
       }
 
@@ -777,16 +777,6 @@ export default function MyLeadsPage() {
     }
   };
 
-  const markLost = async (id: string) => {
-    if (!confirm("Are you sure you want to mark this lead as LOST?")) return;
-    try {
-      await api.patch(`/leads/${id}/lost`, {});
-      setLeads(leads.map(l => l.id === id ? { ...l, status: "LOST", funnelStage: "LOST" } : l));
-    } catch (err: any) {
-      console.error("Failed to mark lost", err);
-      alert(err.response?.data?.error || "Failed to mark lead as lost");
-    }
-  };
 
   const handleLogCall = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2067,7 +2057,7 @@ export default function MyLeadsPage() {
                       })()}
                     </td>
                     <td className="p-4 align-top text-right">
-                      <div className="flex justify-end gap-1.5 items-center">
+                      <div className="flex justify-end items-center">
                         <Button
                           variant="outline"
                           size="sm"
@@ -2078,17 +2068,6 @@ export default function MyLeadsPage() {
                         >
                           <Phone size={13} className="mr-1 text-accent" />
                           Log Call
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs text-danger hover:bg-danger/10 hover:text-danger"
-                          onClick={() => markLost(lead.id)}
-                          disabled={lead.status === "LOST"}
-                          title="Mark Lost"
-                        >
-                          <XCircle size={13} className="mr-1" />
-                          Lost
                         </Button>
                       </div>
                     </td>
@@ -2346,26 +2325,16 @@ export default function MyLeadsPage() {
                 </div>
 
                 {/* Card Action Buttons */}
-                <div className="flex gap-2 pt-1 border-t border-border/60">
+                <div className="pt-1 border-t border-border/60">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 justify-center py-2 h-9 text-xs font-semibold"
+                    className="w-full justify-center py-2 h-9 text-xs font-semibold"
                     onClick={() => openCallModal(lead)}
                     disabled={lead.status === "LOST"}
                   >
                     <Phone size={14} className="mr-1 text-accent" />
                     Log Call
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2.5 text-xs text-danger hover:bg-danger/10 hover:text-danger"
-                    onClick={() => markLost(lead.id)}
-                    disabled={lead.status === "LOST"}
-                  >
-                    <XCircle size={14} className="mr-1" />
-                    Lost
                   </Button>
                 </div>
               </div>
