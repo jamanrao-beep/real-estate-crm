@@ -289,16 +289,11 @@ async function autoAssignLeads(req, res) {
   }
 }
 
-// Helper to enforce strict lead access control:
-// Only Admin and the assigned Sales Person (or referring Broker) can view/modify
+// Helper to enforce lead access control:
+// Admin and Sales Persons can view/modify leads (supporting team collaboration and unassigned leads)
 function checkLeadAccess(req, lead) {
   if (req.user.role === "ADMIN") return { allowed: true };
-  if (req.user.role === "SALES_PERSON") {
-    if (lead.assignedToId && lead.assignedToId === req.user.userId) {
-      return { allowed: true };
-    }
-    return { allowed: false, message: "Access denied: This lead is not assigned to you" };
-  }
+  if (req.user.role === "SALES_PERSON") return { allowed: true };
   if (req.user.role === "BROKER") {
     if (lead.brokerId && lead.brokerId === req.user.userId) {
       return { allowed: true };
@@ -577,7 +572,13 @@ async function scheduleFollowUp(req, res) {
       return res.status(403).json({ error: access.message });
     }
 
-    const newFollowUpDate = followUpAt ? new Date(followUpAt) : null;
+    let newFollowUpDate = null;
+    if (followUpAt) {
+      const d = new Date(followUpAt);
+      if (!isNaN(d.getTime())) {
+        newFollowUpDate = d;
+      }
+    }
     const newFollowUpNotes = followUpNotes !== undefined ? (followUpNotes ? followUpNotes.trim() : null) : lead.followUpNotes;
 
     const updatedLead = await prisma.lead.update({
@@ -585,6 +586,7 @@ async function scheduleFollowUp(req, res) {
       data: {
         followUpAt: newFollowUpDate,
         followUpNotes: newFollowUpNotes,
+        ...(!lead.assignedToId && req.user.role === "SALES_PERSON" ? { assignedToId: req.user.userId } : {}),
       },
       include: standardLeadInclude,
     });
@@ -608,8 +610,8 @@ async function scheduleFollowUp(req, res) {
 
     return res.json(updatedLead);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Failed to schedule follow-up" });
+    console.error("Failed to schedule follow-up:", err);
+    return res.status(500).json({ error: err.message || "Failed to schedule follow-up" });
   }
 }
 

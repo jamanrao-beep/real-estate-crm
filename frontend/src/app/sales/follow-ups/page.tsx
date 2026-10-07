@@ -125,6 +125,12 @@ function formatISTDateTime(d: Date | string | null | undefined): string {
   });
 }
 
+function parseSafeIso(val?: string | null): string | null {
+  if (!val || typeof val !== "string" || !val.trim()) return null;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export default function SalesFollowUpsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [summary, setSummary] = useState<Summary>({
@@ -253,13 +259,14 @@ export default function SalesFollowUpsPage() {
 
     try {
       setIsSubmittingCall(true);
+      const parsedFollowUpAt = parseSafeIso(nextFollowUpAt);
       await api.post("/calls", {
         leadId: activeCallLead.id,
-        notes: callNotes.trim(),
-        occupation: callOccupation.trim(),
-        budget: callBudget.trim(),
-        followUpAt: nextFollowUpAt ? new Date(nextFollowUpAt).toISOString() : null,
-        followUpNotes: nextFollowUpNotes.trim() || null,
+        notes: (callNotes ?? "").toString().trim(),
+        occupation: (callOccupation ?? "").toString().trim(),
+        budget: (callBudget ?? "").toString().trim(),
+        followUpAt: parsedFollowUpAt,
+        followUpNotes: (nextFollowUpNotes ?? "").toString().trim() || null,
       });
 
       alert("Interaction saved successfully! Follow-up updated.");
@@ -267,7 +274,8 @@ export default function SalesFollowUpsPage() {
       fetchFollowUps();
     } catch (err: any) {
       console.error("Failed to log call:", err);
-      alert(err.response?.data?.error || "Failed to log interaction");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to log interaction";
+      alert(errMsg);
     } finally {
       setIsSubmittingCall(false);
     }
@@ -304,9 +312,14 @@ export default function SalesFollowUpsPage() {
 
     try {
       setIsSubmittingReschedule(true);
+      const parsedRescheduleDate = parseSafeIso(rescheduleDate);
+      if (!parsedRescheduleDate) {
+        alert("Please pick a valid reschedule date and time");
+        return;
+      }
       await api.patch(`/leads/${activeRescheduleLead.id}/follow-up`, {
-        followUpAt: new Date(rescheduleDate).toISOString(),
-        followUpNotes: rescheduleNotes.trim() || null,
+        followUpAt: parsedRescheduleDate,
+        followUpNotes: (rescheduleNotes ?? "").toString().trim() || null,
       });
 
       alert("Follow-up rescheduled successfully!");
@@ -314,7 +327,8 @@ export default function SalesFollowUpsPage() {
       fetchFollowUps();
     } catch (err: any) {
       console.error("Failed to reschedule:", err);
-      alert(err.response?.data?.error || "Failed to reschedule follow-up");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to reschedule follow-up";
+      alert(errMsg);
     } finally {
       setIsSubmittingReschedule(false);
     }

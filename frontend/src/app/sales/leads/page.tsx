@@ -278,6 +278,12 @@ function formatFollowUpDate(dateStr: string) {
   })} at ${timeStr}`;
 }
 
+function parseSafeIso(val?: string | null): string | null {
+  if (!val || typeof val !== "string" || !val.trim()) return null;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export default function MyLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -835,21 +841,27 @@ export default function MyLeadsPage() {
     if (!activeCallLead) return;
 
     try {
+      const parsedFollowUpAt = parseSafeIso(followUpAt);
+      const safeOccupation = (occupation ?? "").toString().trim();
+      const safeLocation = (location ?? "").toString().trim();
+      const safeBudget = (budget ?? "").toString().trim();
+      const safeCallNotes = (callNotes ?? "").toString().trim();
+      const safeFollowUpNotes = (followUpNotes ?? "").toString().trim() || null;
+
       await api.post("/calls", {
         leadId: activeCallLead.id,
-        notes: callNotes,
-        occupation: occupation.trim(),
-        location: location.trim(),
-        budget: budget.trim(),
-        followUpAt: followUpAt ? new Date(followUpAt).toISOString() : null,
-        followUpNotes: followUpNotes || null,
+        notes: safeCallNotes,
+        occupation: safeOccupation,
+        location: safeLocation,
+        budget: safeBudget,
+        followUpAt: parsedFollowUpAt,
+        followUpNotes: safeFollowUpNotes,
       });
 
       // Update lead in local state so table and cards reflect details immediately
-      const cleanCallNotes = callNotes.trim();
       const newCallLogEntry = {
         id: "temp-" + Date.now(),
-        notes: cleanCallNotes || null,
+        notes: safeCallNotes || null,
         createdAt: new Date().toISOString(),
         salesPersonId: currentUserId || activeCallLead.assignedToId || "",
       };
@@ -857,14 +869,14 @@ export default function MyLeadsPage() {
         ...l,
         formAnswers: {
           ...(typeof l.formAnswers === "object" ? l.formAnswers : {}),
-          occupation: occupation.trim(),
-          location: location.trim(),
-          budget: budget.trim(),
-          ...(cleanCallNotes ? { callNotes: cleanCallNotes } : {}),
+          occupation: safeOccupation,
+          location: safeLocation,
+          budget: safeBudget,
+          ...(safeCallNotes ? { callNotes: safeCallNotes } : {}),
         },
         callLogs: [newCallLogEntry, ...(l.callLogs || [])],
-        followUpAt: followUpAt ? new Date(followUpAt).toISOString() : l.followUpAt,
-        followUpNotes: followUpAt ? (followUpNotes || null) : l.followUpNotes,
+        followUpAt: parsedFollowUpAt || l.followUpAt,
+        followUpNotes: parsedFollowUpAt ? safeFollowUpNotes : l.followUpNotes,
       } : l));
 
       alert("Interaction & lead details saved successfully!");
@@ -877,7 +889,8 @@ export default function MyLeadsPage() {
       setFollowUpNotes("");
     } catch (err: any) {
       console.error("Failed to log call", err);
-      alert(err.response?.data?.error || "Failed to log interaction");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to log interaction";
+      alert(errMsg);
     }
   };
 
@@ -885,18 +898,26 @@ export default function MyLeadsPage() {
     try {
       await api.patch(`/leads/${leadId}/follow-up`, { followUpAt: null, followUpNotes: null });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, followUpAt: null, followUpNotes: null } : l));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to clear follow-up", err);
-      alert("Failed to clear follow-up");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to clear follow-up";
+      alert(errMsg);
     }
   };
 
   const openCallModal = (lead: Lead) => {
     setCallNotes("");
-    setOccupation(lead.formAnswers?.occupation || "");
-    setLocation(lead.formAnswers?.location || "");
-    setBudget(lead.formAnswers?.budget || "");
-    setFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    setOccupation(lead.formAnswers?.occupation != null ? String(lead.formAnswers.occupation) : "");
+    setLocation(lead.formAnswers?.location != null ? String(lead.formAnswers.location) : "");
+    setBudget(lead.formAnswers?.budget != null ? String(lead.formAnswers.budget) : "");
+    let initialFollowUpAt = "";
+    if (lead.followUpAt) {
+      const d = new Date(lead.followUpAt);
+      if (!isNaN(d.getTime())) {
+        initialFollowUpAt = d.toISOString().slice(0, 16);
+      }
+    }
+    setFollowUpAt(initialFollowUpAt);
     setFollowUpNotes(lead.followUpNotes || "");
     setActiveCallLead(lead);
   };
@@ -904,7 +925,14 @@ export default function MyLeadsPage() {
   const openOfficeVisitModal = (lead: Lead) => {
     setActiveOfficeVisitLead(lead);
     setOfficeVisitNotes("");
-    setOfficeVisitFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    let initialFollowUpAt = "";
+    if (lead.followUpAt) {
+      const d = new Date(lead.followUpAt);
+      if (!isNaN(d.getTime())) {
+        initialFollowUpAt = d.toISOString().slice(0, 16);
+      }
+    }
+    setOfficeVisitFollowUpAt(initialFollowUpAt);
     setOfficeVisitFollowUpNotes(lead.followUpNotes || "");
   };
 
@@ -921,11 +949,14 @@ export default function MyLeadsPage() {
         ? `[Office Visit] ${officeVisitNotes.trim()}`
         : "[Office Visit] Client visited office.";
 
+      const parsedFollowUpAt = parseSafeIso(officeVisitFollowUpAt);
+      const safeFollowUpNotes = (officeVisitFollowUpNotes ?? "").toString().trim() || null;
+
       await api.post("/calls", {
         leadId: activeOfficeVisitLead.id,
         notes: visitNote,
-        followUpAt: officeVisitFollowUpAt ? new Date(officeVisitFollowUpAt).toISOString() : null,
-        followUpNotes: officeVisitFollowUpNotes || null,
+        followUpAt: parsedFollowUpAt,
+        followUpNotes: safeFollowUpNotes,
       });
 
       const newCallLogEntry = {
@@ -951,8 +982,8 @@ export default function MyLeadsPage() {
                 funnelStage: "OFFICE_VISIT_DONE",
                 callLogs: [newCallLogEntry, ...(l.callLogs || [])],
                 statusHistory: [newStatusHistoryEntry, ...(l.statusHistory || [])],
-                followUpAt: officeVisitFollowUpAt ? new Date(officeVisitFollowUpAt).toISOString() : l.followUpAt,
-                followUpNotes: officeVisitFollowUpAt ? (officeVisitFollowUpNotes || null) : l.followUpNotes,
+                followUpAt: parsedFollowUpAt || l.followUpAt,
+                followUpNotes: parsedFollowUpAt ? safeFollowUpNotes : l.followUpNotes,
               }
             : l
         )
@@ -963,7 +994,8 @@ export default function MyLeadsPage() {
       setOfficeVisitNotes("");
     } catch (err: any) {
       console.error("Failed to record office visit", err);
-      alert(err?.response?.data?.error || "Failed to record office visit");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to record office visit";
+      alert(errMsg);
     } finally {
       setIsSavingVisit(false);
     }
@@ -980,7 +1012,14 @@ export default function MyLeadsPage() {
 
     setSiteVisitProject(detectedProject);
     setSiteVisitNotes("");
-    setSiteVisitFollowUpAt(lead.followUpAt ? new Date(lead.followUpAt).toISOString().slice(0, 16) : "");
+    let initialFollowUpAt = "";
+    if (lead.followUpAt) {
+      const d = new Date(lead.followUpAt);
+      if (!isNaN(d.getTime())) {
+        initialFollowUpAt = d.toISOString().slice(0, 16);
+      }
+    }
+    setSiteVisitFollowUpAt(initialFollowUpAt);
     setSiteVisitFollowUpNotes(lead.followUpNotes || "");
   };
 
@@ -999,11 +1038,14 @@ export default function MyLeadsPage() {
         ? `[Site Visit${proj ? ` - ${proj}` : ""}] ${cleanNotes}`
         : `[Site Visit${proj ? ` - ${proj}` : ""}] Client completed site visit.`;
 
+      const parsedFollowUpAt = parseSafeIso(siteVisitFollowUpAt);
+      const safeFollowUpNotes = (siteVisitFollowUpNotes ?? "").toString().trim() || null;
+
       await api.post("/calls", {
         leadId: activeSiteVisitLead.id,
         notes: visitNote,
-        followUpAt: siteVisitFollowUpAt ? new Date(siteVisitFollowUpAt).toISOString() : null,
-        followUpNotes: siteVisitFollowUpNotes || null,
+        followUpAt: parsedFollowUpAt,
+        followUpNotes: safeFollowUpNotes,
       });
 
       const newCallLogEntry = {
@@ -1029,8 +1071,8 @@ export default function MyLeadsPage() {
                 funnelStage: "SITE_VISIT_DONE",
                 callLogs: [newCallLogEntry, ...(l.callLogs || [])],
                 statusHistory: [newStatusHistoryEntry, ...(l.statusHistory || [])],
-                followUpAt: siteVisitFollowUpAt ? new Date(siteVisitFollowUpAt).toISOString() : l.followUpAt,
-                followUpNotes: siteVisitFollowUpAt ? (siteVisitFollowUpNotes || null) : l.followUpNotes,
+                followUpAt: parsedFollowUpAt || l.followUpAt,
+                followUpNotes: parsedFollowUpAt ? safeFollowUpNotes : l.followUpNotes,
               }
             : l
         )
@@ -1042,7 +1084,8 @@ export default function MyLeadsPage() {
       setSiteVisitProject("");
     } catch (err: any) {
       console.error("Failed to record site visit", err);
-      alert(err?.response?.data?.error || "Failed to record site visit");
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to record site visit";
+      alert(errMsg);
     } finally {
       setIsSavingSiteVisit(false);
     }

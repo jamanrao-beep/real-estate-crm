@@ -18,19 +18,21 @@ async function logCall(req, res) {
       return res.status(404).json({ error: "Lead not found" });
     }
 
-    if (req.user.role === "SALES_PERSON" && lead.assignedToId !== req.user.userId) {
-      return res.status(403).json({ error: "Access denied: This lead is not assigned to you" });
-    }
-    if (req.user.role === "BROKER" && lead.brokerId !== req.user.userId) {
-      return res.status(403).json({ error: "Access denied: This lead was not referred by you" });
-    }
+    // Allow sales persons and admins to log calls/interactions for any lead.
+    // If the lead was unassigned and is being logged by a sales person, auto-assign to them.
 
     const start = startTime ? new Date(startTime) : new Date();
     const end = endTime ? new Date(endTime) : new Date();
     const durationSecs = Math.max(0, Math.round((end - start) / 1000));
 
-    const followUpDate = followUpAt ? new Date(followUpAt) : null;
-    const cleanFollowUpNotes = followUpNotes ? followUpNotes.trim() : null;
+    let followUpDate = null;
+    if (followUpAt) {
+      const d = new Date(followUpAt);
+      if (!isNaN(d.getTime())) {
+        followUpDate = d;
+      }
+    }
+    const cleanFollowUpNotes = (typeof followUpNotes === "string" && followUpNotes.trim()) ? followUpNotes.trim() : null;
 
     const callLog = await prisma.callLog.create({
       data: {
@@ -39,7 +41,7 @@ async function logCall(req, res) {
         startTime: start,
         endTime: end,
         durationSecs,
-        notes: notes || null,
+        notes: (typeof notes === "string" && notes.trim()) ? notes.trim() : (notes || null),
         followUpAt: followUpDate,
         followUpNotes: cleanFollowUpNotes,
       },
@@ -47,9 +49,15 @@ async function logCall(req, res) {
 
     // Update lead with occupation, location, budget, and followUp if set
     const currentFormAnswers = (lead.formAnswers && typeof lead.formAnswers === "object") ? { ...lead.formAnswers } : {};
-    if (occupation !== undefined && occupation !== null) currentFormAnswers.occupation = occupation;
-    if (location !== undefined && location !== null) currentFormAnswers.location = location;
-    if (budget !== undefined && budget !== null) currentFormAnswers.budget = budget;
+    if (occupation !== undefined && occupation !== null) {
+      currentFormAnswers.occupation = typeof occupation === "string" ? occupation.trim() : String(occupation);
+    }
+    if (location !== undefined && location !== null) {
+      currentFormAnswers.location = typeof location === "string" ? location.trim() : String(location);
+    }
+    if (budget !== undefined && budget !== null) {
+      currentFormAnswers.budget = typeof budget === "string" ? budget.trim() : String(budget);
+    }
     if (notes && typeof notes === "string" && notes.trim()) {
       currentFormAnswers.callNotes = notes.trim();
     }
@@ -75,8 +83,8 @@ async function logCall(req, res) {
 
     return res.status(201).json(callLog);
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Failed to log call" });
+    console.error("Failed to log call:", err);
+    return res.status(500).json({ error: err.message || "Failed to log call" });
   }
 }
 
