@@ -109,6 +109,14 @@ model Lead {
   deals              Deal[]
   assignmentHistory  LeadAssignmentHistory[]
   statusHistory      LeadStatusHistory[]
+
+  @@index([assignedToId, status])
+  @@index([phone])
+  @@index([email])
+  @@index([dateReceived])
+  @@index([followUpAt])
+  @@index([category])
+  @@index([funnelStage])
 }
 
 // Tracks who a lead was assigned to over time (for audit + reassignment history)
@@ -122,6 +130,9 @@ model LeadAssignmentHistory {
   assignedBy   User     @relation("AssignedBy", fields: [assignedById], references: [id])
 
   assignedAt   DateTime @default(now())
+
+  @@index([leadId])
+  @@index([assignedToId])
 }
 
 // Tracks every funnel stage change (lets Admin calculate time-in-stage, conversion rates)
@@ -135,6 +146,8 @@ model LeadStatusHistory {
   changedBy   User        @relation(fields: [changedById], references: [id])
 
   changedAt   DateTime    @default(now())
+
+  @@index([leadId])
 }
 
 model CallLog {
@@ -153,6 +166,9 @@ model CallLog {
   followUpNotes String?   @db.Text
 
   createdAt     DateTime  @default(now())
+
+  @@index([leadId])
+  @@index([salesPersonId, createdAt])
 }
 
 // A Deal represents the agreed sale tied to a lead once it's being closed.
@@ -205,5 +221,7 @@ model Notification {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 

@@ -59,6 +59,35 @@ async function seedDatabase() {
       console.error("[Migration] Notice updating enum columns:", migErr.message);
     }
 
+    // Ensure MySQL performance indexes exist
+    try {
+      console.log("[Migration] Ensuring performance indexes exist in MySQL...");
+      const indexesToCreate = [
+        "CREATE INDEX idx_lead_assigned_status ON `Lead` (assignedToId, status)",
+        "CREATE INDEX idx_lead_phone ON `Lead` (phone)",
+        "CREATE INDEX idx_lead_email ON `Lead` (email)",
+        "CREATE INDEX idx_lead_date_received ON `Lead` (dateReceived)",
+        "CREATE INDEX idx_lead_follow_up ON `Lead` (followUpAt)",
+        "CREATE INDEX idx_lead_funnel_stage ON `Lead` (funnelStage)",
+        "CREATE INDEX idx_call_lead_id ON `CallLog` (leadId)",
+        "CREATE INDEX idx_call_sales_created ON `CallLog` (salesPersonId, createdAt)",
+        "CREATE INDEX idx_status_history_lead ON `LeadStatusHistory` (leadId)",
+        "CREATE INDEX idx_assign_history_lead ON `LeadAssignmentHistory` (leadId)",
+        "CREATE INDEX idx_notification_user ON `Notification` (userId, createdAt)",
+      ];
+
+      for (const idxSql of indexesToCreate) {
+        try {
+          await prisma.$executeRawUnsafe(idxSql);
+        } catch (e) {
+          // Index likely already exists (MySQL error 1061: Duplicate key name)
+        }
+      }
+      console.log("[Migration] Performance indexes verified successfully.");
+    } catch (idxErr) {
+      console.error("[Migration] Notice verifying indexes:", idxErr.message);
+    }
+
     console.log("[Seed] All default users verified/seeded successfully.");
     return { success: true, count: defaultUsers.length };
   } catch (err) {
