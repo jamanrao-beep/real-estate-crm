@@ -72,6 +72,7 @@ interface Lead {
   } | any;
   isToday?: boolean;
   isPastDay?: boolean;
+  isFutureDay?: boolean;
   followUpStatus?: "UPCOMING" | "OVERDUE" | "COMPLETED";
 }
 
@@ -80,7 +81,10 @@ interface Summary {
   completedToday: number;
   overdueToday: number;
   upcomingToday: number;
+  totalUpcoming?: number;
+  futureUpcoming?: number;
   allOverdue: number;
+  allPending?: number;
   todayIST: string;
 }
 
@@ -95,6 +99,18 @@ function toISTDateString(d: Date | string | null | undefined): string {
     month: "2-digit",
     day: "2-digit",
   }).format(dateObj);
+}
+
+// Format date in IST (e.g., "09 Oct")
+function formatISTDate(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const dateObj = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return "";
+  return dateObj.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 // Format 12-hour time in IST
@@ -203,7 +219,7 @@ export default function SalesFollowUpsPage() {
       if (activeTab === "TODAY") {
         if (!lead.isToday) return false;
       } else if (activeTab === "UPCOMING") {
-        if (!lead.isToday || lead.followUpStatus !== "UPCOMING") return false;
+        if (lead.followUpStatus !== "UPCOMING") return false;
       } else if (activeTab === "OVERDUE") {
         if (!lead.isToday || lead.followUpStatus !== "OVERDUE") return false;
       } else if (activeTab === "COMPLETED") {
@@ -413,10 +429,10 @@ export default function SalesFollowUpsPage() {
             <Clock size={16} className={activeTab === "UPCOMING" ? "text-white" : "text-amber-600"} />
           </div>
           <div className="text-2xl font-serif font-bold mt-2 text-amber-600 dark:text-amber-400" style={{ color: activeTab === "UPCOMING" ? "white" : undefined }}>
-            {summary.upcomingToday}
+            {summary.totalUpcoming ?? summary.upcomingToday}
           </div>
           <div className={cn("text-[10px] mt-0.5", activeTab === "UPCOMING" ? "text-white/80" : "text-ink-soft")}>
-            Later today
+            {summary.futureUpcoming ? `${summary.upcomingToday} today, ${summary.futureUpcoming} future` : "Today & future dates"}
           </div>
         </button>
 
@@ -488,7 +504,7 @@ export default function SalesFollowUpsPage() {
             <AlertCircle size={16} className={activeTab === "ALL_PENDING" ? "text-white" : "text-purple-600"} />
           </div>
           <div className="text-2xl font-serif font-bold mt-2 text-purple-700 dark:text-purple-400" style={{ color: activeTab === "ALL_PENDING" ? "white" : undefined }}>
-            {summary.allOverdue}
+            {summary.allPending ?? summary.allOverdue}
           </div>
           <div className={cn("text-[10px] mt-0.5", activeTab === "ALL_PENDING" ? "text-white/80" : "text-ink-soft")}>
             Includes older dates
@@ -522,7 +538,7 @@ export default function SalesFollowUpsPage() {
                 : "bg-surface text-ink-soft hover:text-ink border border-border"
             )}
           >
-            ⏳ Upcoming ({summary.upcomingToday})
+            ⏳ Upcoming ({summary.totalUpcoming ?? summary.upcomingToday})
           </button>
           <button
             type="button"
@@ -558,7 +574,7 @@ export default function SalesFollowUpsPage() {
                 : "bg-surface text-ink-soft hover:text-ink border border-border"
             )}
           >
-            ⚠️ All Pending & Older ({summary.allOverdue})
+            ⚠️ All Pending & Older ({summary.allPending ?? summary.allOverdue})
           </button>
         </div>
 
@@ -603,9 +619,11 @@ export default function SalesFollowUpsPage() {
         <div className="space-y-3">
           {filteredLeads.map((lead, idx) => {
             const timeStr = formatISTTime(lead.followUpAt);
+            const dateStr = formatISTDate(lead.followUpAt);
             const dateTimeStr = formatISTDateTime(lead.followUpAt);
             const isCompleted = lead.followUpStatus === "COMPLETED";
             const isOverdue = lead.followUpStatus === "OVERDUE";
+            const isFuture = lead.isFutureDay || (!lead.isToday && !lead.isPastDay && lead.followUpStatus === "UPCOMING");
 
             // Extract last interaction note from callLogs
             const lastCallLog = lead.callLogs && lead.callLogs.length > 0 ? lead.callLogs[0] : null;
@@ -639,9 +657,11 @@ export default function SalesFollowUpsPage() {
                     )}
                   >
                     <Clock size={16} className="mb-0.5" />
-                    <span className="text-xs font-bold leading-tight">{timeStr || "Today"}</span>
+                    <span className="text-xs font-bold leading-tight">
+                      {lead.isToday ? (timeStr || "Today") : (dateStr || timeStr || "Upcoming")}
+                    </span>
                     <span className="text-[9px] font-semibold uppercase tracking-wider mt-0.5">
-                      {isCompleted ? "Done" : isOverdue ? "Overdue" : "Pending"}
+                      {isCompleted ? "Done" : isOverdue ? "Overdue" : isFuture ? "Future" : "Pending"}
                     </span>
                   </div>
 
@@ -691,8 +711,14 @@ export default function SalesFollowUpsPage() {
                       />
 
                       {lead.isPastDay && (
-                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-500/10 px-1.5 py-0.2 rounded border border-rose-400/30">
-                          Scheduled for {dateTimeStr}
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-400/30">
+                          Overdue: Was {dateTimeStr}
+                        </span>
+                      )}
+
+                      {isFuture && (
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-400/30">
+                          Upcoming: Scheduled for {dateTimeStr}
                         </span>
                       )}
                     </div>

@@ -1157,10 +1157,13 @@ async function getTodayFollowUps(req, res) {
         followUpStatus = "OVERDUE";
       }
 
+      const isFutureDay = followUpIST > todayIST;
+
       return {
         ...lead,
         isToday,
         isPastDay,
+        isFutureDay,
         followUpStatus,
       };
     });
@@ -1170,7 +1173,10 @@ async function getTodayFollowUps(req, res) {
     const completedToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "COMPLETED").length;
     const overdueToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "OVERDUE").length;
     const upcomingToday = enrichedLeads.filter((l) => l.isToday && l.followUpStatus === "UPCOMING").length;
+    const totalUpcoming = enrichedLeads.filter((l) => l.followUpStatus === "UPCOMING").length;
+    const futureUpcoming = enrichedLeads.filter((l) => l.isFutureDay && l.followUpStatus === "UPCOMING").length;
     const allOverdue = enrichedLeads.filter((l) => l.followUpStatus === "OVERDUE").length;
+    const allPending = enrichedLeads.filter((l) => l.followUpStatus !== "COMPLETED").length;
 
     // Filter according to request status/date
     let filtered = enrichedLeads;
@@ -1179,7 +1185,7 @@ async function getTodayFollowUps(req, res) {
     } else if (status === "OVERDUE") {
       filtered = enrichedLeads.filter((l) => l.followUpStatus === "OVERDUE" && (date === "all" ? true : l.isToday));
     } else if (status === "UPCOMING") {
-      filtered = enrichedLeads.filter((l) => l.followUpStatus === "UPCOMING" && (date === "all" ? true : l.isToday));
+      filtered = enrichedLeads.filter((l) => l.followUpStatus === "UPCOMING");
     } else if (status === "ALL_PENDING") {
       filtered = enrichedLeads.filter((l) => l.followUpStatus !== "COMPLETED");
     } else if (status === "ALL_OVERDUE") {
@@ -1198,7 +1204,10 @@ async function getTodayFollowUps(req, res) {
         completedToday,
         overdueToday,
         upcomingToday,
+        totalUpcoming,
+        futureUpcoming,
         allOverdue,
+        allPending,
         todayIST,
       },
     });
