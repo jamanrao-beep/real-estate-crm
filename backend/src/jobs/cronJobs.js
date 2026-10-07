@@ -6,33 +6,43 @@ function startCronJobs() {
   setInterval(async () => {
     try {
       const now = new Date();
-      // Find leads with followUpAt in the past, that haven't been cleared
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+      // Find active leads with followUpAt within the last 24 hours
       const leadsToFollowUp = await prisma.lead.findMany({
         where: {
           followUpAt: {
-            lte: now
+            lte: now,
+            gte: twentyFourHoursAgo,
           },
           assignedToId: {
-            not: null
-          }
-        }
+            not: null,
+          },
+        },
       });
 
-      for (const lead of leadsToFollowUp) {
-        // Check if notification already sent in the last 12 hours for this lead
-        const recentNotif = await prisma.notification.findFirst({
-          where: {
-            userId: lead.assignedToId,
-            message: { contains: `lead ${lead.name} (${lead.phone})` },
-            createdAt: { gte: new Date(Date.now() - 12 * 60 * 60 * 1000) },
-          },
-        });
+      if (leadsToFollowUp.length === 0) return;
 
-        if (!recentNotif) {
-          const noteDetail = lead.followUpNotes ? ` | Note: "${lead.followUpNotes}"` : "";
+      // Pre-fetch all notifications sent in the last 12 hours in ONE batch query
+      const recentNotifs = await prisma.notification.findMany({
+        where: {
+          createdAt: { gte: twelveHoursAgo },
+        },
+        select: { userId: true, message: true },
+      });
+      const notifKeySet = new Set(recentNotifs.map((n) => `${n.userId}::${n.message}`));
+
+      for (const lead of leadsToFollowUp) {
+        const noteDetail = lead.followUpNotes ? ` | Note: "${lead.followUpNotes}"` : "";
+        const expectedMessage = `Reminder: Time to follow up with lead ${lead.name} (${lead.phone})${noteDetail}!`;
+        const key = `${lead.assignedToId}::${expectedMessage}`;
+
+        if (!notifKeySet.has(key)) {
+          notifKeySet.add(key);
           await prisma.notification.create({
             data: {
-              message: `Reminder: Time to follow up with lead ${lead.name} (${lead.phone})${noteDetail}!`,
+              message: expectedMessage,
               userId: lead.assignedToId,
             },
           });

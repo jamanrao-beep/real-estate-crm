@@ -152,6 +152,27 @@ async function syncSingleSheet(project) {
     let synced = 0;
     let skipped = 0;
 
+    // Performance optimization: Pre-fetch existing phones & emails in ONE query instead of N individual queries
+    const existingLeads = await prisma.lead.findMany({
+      select: { phone: true, email: true }
+    });
+    const existingPhoneSet = new Set();
+    const existingEmailSet = new Set();
+    for (const el of existingLeads) {
+      if (el.phone) {
+        const clean = el.phone.replace(/[\s\-\(\)]/g, "");
+        existingPhoneSet.add(clean);
+        if (clean.startsWith("+91") && clean.length === 13) {
+          existingPhoneSet.add(clean.substring(3));
+        } else if (clean.length === 10) {
+          existingPhoneSet.add("+91" + clean);
+        }
+      }
+      if (el.email && !el.email.includes("test@")) {
+        existingEmailSet.add(el.email.toLowerCase().trim());
+      }
+    }
+
     // Process all rows except the header row itself
     for (let i = 0; i < rows.length; i++) {
       if (i === headerIdx) continue;
@@ -202,17 +223,11 @@ async function syncSingleSheet(project) {
         }
       }
 
-      // Check if lead already exists with this phone or email
-      const existing = await prisma.lead.findFirst({
-        where: {
-          OR: [
-            ...phoneVariants.map(p => ({ phone: p })),
-            ...(email && !email.includes("test@") ? [{ email }] : [])
-          ]
-        }
-      });
+      // Check if lead already exists using in-memory Set (O(1) instant lookup)
+      const alreadyExists = phoneVariants.some(p => existingPhoneSet.has(p)) ||
+        (email && !email.includes("test@") && existingEmailSet.has(email.toLowerCase().trim()));
 
-      if (existing) {
+      if (alreadyExists) {
         skipped++;
         continue;
       }
@@ -255,6 +270,9 @@ async function syncSingleSheet(project) {
           status: "ACTIVE"
         }
       });
+
+      phoneVariants.forEach(p => existingPhoneSet.add(p));
+      if (email) existingEmailSet.add(email.toLowerCase().trim());
 
       synced++;
       console.log(`[GoogleSheetSync] [${project.name}] Imported new lead: ${name} (${phone})`);
