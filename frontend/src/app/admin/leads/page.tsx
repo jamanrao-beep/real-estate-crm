@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus, Download, MessageSquare } from "lucide-react";
+import { Filter, Search, Clock, FileSpreadsheet, Check, Upload, MessageCircle, UserPlus, Download, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import ExcelImportModal from "@/components/ExcelImportModal";
 import AddLeadModal from "@/components/AddLeadModal";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -128,6 +128,20 @@ export default function AllLeadsPage() {
   const [category, setCategory] = useState("");
   const [funnelStage, setFunnelStage] = useState("");
   const [project, setProject] = useState("");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [salesPersonId, category, funnelStage, project]);
+
+  const totalPages = Math.ceil(leads.length / pageSize) || 1;
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return leads.slice(start, start + pageSize);
+  }, [leads, currentPage, pageSize]);
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -537,7 +551,7 @@ export default function AllLeadsPage() {
                   </td>
                 </tr>
               ) : (
-                leads.map((lead) => (
+                paginatedLeads.map((lead) => (
                   <tr key={lead.id} className="hover:bg-surface/50 transition-colors">
                     <td className="p-4 align-top">
                       <div className="font-medium text-ink">{lead.name}</div>
@@ -732,7 +746,7 @@ export default function AllLeadsPage() {
             <p className="text-xs text-ink-soft">Try changing your filters.</p>
           </div>
         ) : (
-          leads.map((lead) => (
+          paginatedLeads.map((lead) => (
             <div key={lead.id} className="bg-surface border border-border rounded-xl p-4 shadow-sm space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -902,6 +916,66 @@ export default function AllLeadsPage() {
           ))
         )}
       </div>
+
+      {/* Responsive Pagination Bar */}
+      {leads.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-surface border border-border rounded-xl shadow-xs text-xs text-ink-soft">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-ink">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+              <strong className="text-ink">{Math.min(currentPage * pageSize, leads.length)}</strong> of{" "}
+              <strong className="text-ink">{leads.length}</strong> leads
+            </span>
+            <span className="hidden sm:inline text-border">|</span>
+            <div className="flex items-center gap-1.5">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-bg border border-border rounded px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={currentPage <= 1}
+              className="h-8 px-2.5 text-xs font-medium"
+            >
+              <ChevronLeft size={14} className="mr-1" /> Prev
+            </Button>
+            <div className="px-3 font-semibold text-ink">
+              Page {currentPage} of {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={currentPage >= totalPages}
+              className="h-8 px-2.5 text-xs font-medium"
+            >
+              Next <ChevronRight size={14} className="ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

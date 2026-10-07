@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import Link from "next/link";
-import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2, MapPin, ArrowRight, CalendarClock } from "lucide-react";
+import { Phone, Search, XCircle, Clock, Calendar, Download, Filter, RotateCcw, MessageSquare, Building2, MapPin, ArrowRight, CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
 import { SourceBadge } from "@/components/SourceBadge";
 import { LeadContactButtons } from "@/components/LeadContactButtons";
 import { LeadNotesBox } from "@/components/LeadNotesBox";
@@ -446,89 +446,159 @@ export default function MyLeadsPage() {
     return false;
   };
 
-  // Dynamic filter logic
-  const filteredLeads = leads.filter((lead) => {
-    if (followUpFilter === "TODAY") {
-      if (!lead.followUpAt || toISTDateString(lead.followUpAt) !== todayStr) {
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, stageFilter, sourceFilter, searchQuery, followUpFilter, datePreset, startDate, endDate, dateTarget]);
+
+  // Memoized filtered leads logic (prevents expensive recalculations on modal opens / non-filter state changes)
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      if (followUpFilter === "TODAY") {
+        if (!lead.followUpAt || toISTDateString(lead.followUpAt) !== todayStr) {
+          return false;
+        }
+      }
+
+      if (categoryFilter === "CALL_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_PICKED") {
         return false;
       }
-    }
-
-    if (categoryFilter === "CALL_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_PICKED") {
-      return false;
-    }
-    if (categoryFilter === "CALL_NOT_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_NOT_PICKED") {
-      return false;
-    }
-    if (stageFilter) {
-      if (stageFilter === "CALLBACK") {
-        if (lead.funnelStage !== "CALLBACK" && lead.funnelStage !== "CALL_NOT_PICKED") return false;
-      } else if (lead.funnelStage !== stageFilter) {
+      if (categoryFilter === "CALL_NOT_PICKED" && getLeadEffectiveCategory(lead) !== "CALL_NOT_PICKED") {
         return false;
       }
-    }
-    if (sourceFilter && sourceFilter !== "ALL") {
-      const leadSource = (lead.source || lead.sourceForm || "").toLowerCase();
-      if (sourceFilter === "FB") {
-        if (!leadSource.includes("facebook") && !leadSource.includes("meta")) return false;
-      } else if (sourceFilter === "SHEET") {
-        if (!leadSource.includes("sheet") && !leadSource.includes("google")) return false;
-      } else if (sourceFilter === "EXCEL") {
-        if (!leadSource.includes("excel") && !leadSource.includes("csv")) return false;
-      } else if (sourceFilter === "WHATSAPP") {
-        if (!leadSource.includes("whatsapp")) return false;
-      } else if (sourceFilter === "MANUAL") {
-        if (!leadSource.includes("manual") && !leadSource.includes("entry") && !leadSource.includes("test") && !leadSource.includes("direct")) return false;
-      } else if (sourceFilter === "FUN_VALLEY") {
-        if (!leadSource.includes("fun valley") && !leadSource.includes("funvalley")) return false;
-      } else if (sourceFilter === "SAHASTRADHARA") {
-        if (!leadSource.includes("sahastradhara") && !leadSource.includes("sahastra dhara") && !leadSource.includes("sd")) return false;
-      } else if (sourceFilter === "RANI_POKHARI") {
-        if (!leadSource.includes("rani pokhari") && !leadSource.includes("ranipokhari") && !leadSource.includes("rani")) return false;
-      } else if (sourceFilter === "THANO") {
-        if (!leadSource.includes("thano")) return false;
+      if (stageFilter) {
+        if (stageFilter === "CALLBACK") {
+          if (lead.funnelStage !== "CALLBACK" && lead.funnelStage !== "CALL_NOT_PICKED") return false;
+        } else if (lead.funnelStage !== stageFilter) {
+          return false;
+        }
       }
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const nameMatch = lead.name?.toLowerCase().includes(q);
-      const phoneMatch = lead.phone?.toLowerCase().includes(q);
-      const emailMatch = lead.email?.toLowerCase().includes(q);
-      const sourceMatch = (lead.source || lead.sourceForm || "").toLowerCase().includes(q);
-      const notesMatch = typeof lead.formAnswers?.notes === "string" && lead.formAnswers.notes.toLowerCase().includes(q);
-      if (!nameMatch && !phoneMatch && !emailMatch && !sourceMatch && !notesMatch) {
+      if (sourceFilter && sourceFilter !== "ALL") {
+        const leadSource = (lead.source || lead.sourceForm || "").toLowerCase();
+        if (sourceFilter === "FB") {
+          if (!leadSource.includes("facebook") && !leadSource.includes("meta")) return false;
+        } else if (sourceFilter === "SHEET") {
+          if (!leadSource.includes("sheet") && !leadSource.includes("google")) return false;
+        } else if (sourceFilter === "EXCEL") {
+          if (!leadSource.includes("excel") && !leadSource.includes("csv")) return false;
+        } else if (sourceFilter === "WHATSAPP") {
+          if (!leadSource.includes("whatsapp")) return false;
+        } else if (sourceFilter === "MANUAL") {
+          if (!leadSource.includes("manual") && !leadSource.includes("entry") && !leadSource.includes("test") && !leadSource.includes("direct")) return false;
+        } else if (sourceFilter === "FUN_VALLEY") {
+          if (!leadSource.includes("fun valley") && !leadSource.includes("funvalley")) return false;
+        } else if (sourceFilter === "SAHASTRADHARA") {
+          if (!leadSource.includes("sahastradhara") && !leadSource.includes("sahastra dhara") && !leadSource.includes("sd")) return false;
+        } else if (sourceFilter === "RANI_POKHARI") {
+          if (!leadSource.includes("rani pokhari") && !leadSource.includes("ranipokhari") && !leadSource.includes("rani")) return false;
+        } else if (sourceFilter === "THANO") {
+          if (!leadSource.includes("thano")) return false;
+        }
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = lead.name?.toLowerCase().includes(q);
+        const phoneMatch = lead.phone?.toLowerCase().includes(q);
+        const emailMatch = lead.email?.toLowerCase().includes(q);
+        const sourceMatch = (lead.source || lead.sourceForm || "").toLowerCase().includes(q);
+        const notesMatch = typeof lead.formAnswers?.notes === "string" && lead.formAnswers.notes.toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch && !emailMatch && !sourceMatch && !notesMatch) {
+          return false;
+        }
+      }
+
+      // Date / Daily Report Filter
+      if (isDateFilterActive && !leadMatchesDateFilter(lead)) {
         return false;
       }
-    }
 
-    // Date / Daily Report Filter
-    if (isDateFilterActive && !leadMatchesDateFilter(lead)) {
-      return false;
-    }
+      return true;
+    });
+  }, [leads, followUpFilter, categoryFilter, stageFilter, sourceFilter, searchQuery, isDateFilterActive, dateTarget, datePreset, startDate, endDate, todayStr]);
 
-    return true;
-  });
+  // Paginated window of leads for snappy DOM rendering
+  const totalPages = Math.ceil(filteredLeads.length / pageSize) || 1;
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredLeads.slice(start, start + pageSize);
+  }, [filteredLeads, currentPage, pageSize]);
 
-  // Leads Given / Received Today & Yesterday matching Admin Dashboard
-  const todayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, todayStr)).length;
-  const yesterdayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, yesterdayStr)).length;
+  // Memoized KPIs and filter counts (recalculated ONLY when leads or dates change)
+  const metrics = useMemo(() => {
+    const todayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, todayStr)).length;
+    const yesterdayLeadsGivenCount = leads.filter((l) => isLeadAssignedOnDate(l, yesterdayStr)).length;
 
-  const todayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, todayStr), 0);
-  const todayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, todayStr) > 0).length;
-  const todayCallsCount = todayCallsLogsCount; // Alias for UI
+    const todayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, todayStr), 0);
+    const todayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, todayStr) > 0).length;
+    const todayCallsCount = todayCallsLogsCount;
 
-  const yesterdayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, yesterdayStr), 0);
-  const yesterdayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, yesterdayStr) > 0).length;
+    const yesterdayCallsLogsCount = leads.reduce((sum, l) => sum + getLeadCallsOnDate(l, yesterdayStr), 0);
+    const yesterdayCalledLeadsCount = leads.filter((l) => getLeadCallsOnDate(l, yesterdayStr) > 0).length;
 
-  const todayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, todayStr)).length;
-  const yesterdayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, yesterdayStr)).length;
+    const todayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, todayStr)).length;
+    const yesterdayVisitsCount = leads.filter((l) => isLeadVisitDoneOnDate(l, yesterdayStr)).length;
 
-  const todayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, todayStr)).length;
-  const yesterdayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, yesterdayStr)).length;
+    const todayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, todayStr)).length;
+    const yesterdayActivityCount = leads.filter((l) => isLeadActiveOnDate(l, yesterdayStr)).length;
 
-  const todayFollowUpsCount = leads.filter((l) => l.followUpAt && toISTDateString(l.followUpAt) === todayStr).length;
+    const todayFollowUpsCount = leads.filter((l) => l.followUpAt && toISTDateString(l.followUpAt) === todayStr).length;
 
-  // Counts aligned to active filter targets
+    const categoryCounts = {
+      CALL_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_PICKED").length,
+      CALL_NOT_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_NOT_PICKED").length,
+    };
+
+    const stageCounts = {
+      CALLBACK: leads.filter((l) => l.funnelStage === "CALLBACK" || l.funnelStage === "CALL_NOT_PICKED").length,
+      FOLLOW_UP: leads.filter((l) => l.funnelStage === "FOLLOW_UP").length,
+      INTERESTED: leads.filter((l) => l.funnelStage === "INTERESTED").length,
+      NOT_INTERESTED: leads.filter((l) => l.funnelStage === "NOT_INTERESTED").length,
+      DETAILS_SHARED: leads.filter((l) => l.funnelStage === "DETAILS_SHARED").length,
+      SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
+      OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
+      BOOKING_DONE: leads.filter((l) => l.funnelStage === "BOOKING_DONE").length,
+      DEAL_CLOSED: leads.filter((l) => l.funnelStage === "DEAL_CLOSED").length,
+    };
+
+    return {
+      todayLeadsGivenCount,
+      yesterdayLeadsGivenCount,
+      todayCallsLogsCount,
+      todayCalledLeadsCount,
+      todayCallsCount,
+      yesterdayCallsLogsCount,
+      yesterdayCalledLeadsCount,
+      todayVisitsCount,
+      yesterdayVisitsCount,
+      todayActivityCount,
+      yesterdayActivityCount,
+      todayFollowUpsCount,
+      categoryCounts,
+      stageCounts,
+    };
+  }, [leads, todayStr, yesterdayStr]);
+
+  const {
+    todayLeadsGivenCount,
+    yesterdayLeadsGivenCount,
+    todayCallsLogsCount,
+    todayCalledLeadsCount,
+    todayCallsCount,
+    yesterdayCallsLogsCount,
+    yesterdayCalledLeadsCount,
+    todayVisitsCount,
+    yesterdayVisitsCount,
+    todayActivityCount,
+    yesterdayActivityCount,
+    todayFollowUpsCount,
+    categoryCounts,
+    stageCounts,
+  } = metrics;
+
   const getTodayFilterBadgeCount = () => {
     if (dateTarget === "CALL") return todayCalledLeadsCount;
     if (dateTarget === "VISIT") return todayVisitsCount;
@@ -541,24 +611,6 @@ export default function MyLeadsPage() {
     if (dateTarget === "VISIT") return yesterdayVisitsCount;
     if (dateTarget === "RECEIVED") return yesterdayLeadsGivenCount;
     return yesterdayActivityCount;
-  };
-
-  // Dynamic counts for all categories & funnel stages
-  const categoryCounts = {
-    CALL_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_PICKED").length,
-    CALL_NOT_PICKED: leads.filter((l) => getLeadEffectiveCategory(l) === "CALL_NOT_PICKED").length,
-  };
-
-  const stageCounts = {
-    CALLBACK: leads.filter((l) => l.funnelStage === "CALLBACK" || l.funnelStage === "CALL_NOT_PICKED").length,
-    FOLLOW_UP: leads.filter((l) => l.funnelStage === "FOLLOW_UP").length,
-    INTERESTED: leads.filter((l) => l.funnelStage === "INTERESTED").length,
-    NOT_INTERESTED: leads.filter((l) => l.funnelStage === "NOT_INTERESTED").length,
-    DETAILS_SHARED: leads.filter((l) => l.funnelStage === "DETAILS_SHARED").length,
-    SITE_VISIT_DONE: leads.filter((l) => l.funnelStage === "SITE_VISIT_DONE").length,
-    OFFICE_VISIT_DONE: leads.filter((l) => l.funnelStage === "OFFICE_VISIT_DONE").length,
-    BOOKING_DONE: leads.filter((l) => l.funnelStage === "BOOKING_DONE").length,
-    DEAL_CLOSED: leads.filter((l) => l.funnelStage === "DEAL_CLOSED").length,
   };
 
   // CSV Export
@@ -1857,7 +1909,7 @@ export default function MyLeadsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map((lead) => (
+                paginatedLeads.map((lead) => (
                   <tr key={lead.id} className={`transition-colors ${lead.status === 'LOST' ? 'bg-bg/50 opacity-70' : 'hover:bg-surface/50'}`}>
                     <td className="p-4 align-top w-1/4">
                       <div className="font-medium text-ink flex items-center gap-2">
@@ -2117,7 +2169,7 @@ export default function MyLeadsPage() {
             </div>
           </div>
         ) : (
-          filteredLeads.map((lead) => {
+          paginatedLeads.map((lead) => {
             return (
               <div
                 key={lead.id}
@@ -2342,6 +2394,66 @@ export default function MyLeadsPage() {
           })
         )}
       </div>
+
+      {/* Responsive Pagination Bar */}
+      {filteredLeads.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-surface border border-border rounded-xl shadow-xs text-xs text-ink-soft">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-ink">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+              <strong className="text-ink">{Math.min(currentPage * pageSize, filteredLeads.length)}</strong> of{" "}
+              <strong className="text-ink">{filteredLeads.length}</strong> leads
+            </span>
+            <span className="hidden sm:inline text-border">|</span>
+            <div className="flex items-center gap-1.5">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-bg border border-border rounded px-2 py-1 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={currentPage <= 1}
+              className="h-8 px-2.5 text-xs font-medium"
+            >
+              <ChevronLeft size={14} className="mr-1" /> Prev
+            </Button>
+            <div className="px-3 font-semibold text-ink">
+              Page {currentPage} of {totalPages}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCurrentPage((p) => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={currentPage >= totalPages}
+              className="h-8 px-2.5 text-xs font-medium"
+            >
+              Next <ChevronRight size={14} className="ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Call Logging Modal - Fully Responsive */}
       {activeCallLead && (
