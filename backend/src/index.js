@@ -21,6 +21,9 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.use("/api/auth", authRoutes);
+const { getAllUsers } = require("./controllers/authController");
+const { requireAuth, adminOnly } = require("./middleware/auth");
+app.get("/api/users", requireAuth, adminOnly, getAllUsers);
 app.use("/webhooks", webhookRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/leads", leadRoutes);

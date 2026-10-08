@@ -180,25 +180,25 @@ export default function AdminFollowUpsPage() {
   const fetchFollowUps = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [followUpsRes, usersRes] = await Promise.all([
+      const [followUpsRes, usersRes] = await Promise.allSettled([
         api.get("/leads/follow-ups", {
           params: {
             date: "all",
             ...(selectedRepId && selectedRepId !== "ALL" ? { salesPersonId: selectedRepId } : {}),
           },
         }),
-        api.get("/users"),
+        api.get("/auth/users"),
       ]);
 
-      if (followUpsRes.data) {
-        setLeads(followUpsRes.data.leads || []);
-        if (followUpsRes.data.summary) {
-          setSummary(followUpsRes.data.summary);
+      if (followUpsRes.status === "fulfilled" && followUpsRes.value.data) {
+        setLeads(followUpsRes.value.data.leads || []);
+        if (followUpsRes.value.data.summary) {
+          setSummary(followUpsRes.value.data.summary);
         }
       }
 
-      if (Array.isArray(usersRes.data)) {
-        setSalesPeople(usersRes.data.filter((u: any) => u.role === "SALES_PERSON" || u.role === "ADMIN"));
+      if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value.data)) {
+        setSalesPeople(usersRes.value.data.filter((u: any) => u.role === "SALES_PERSON" || u.role === "ADMIN"));
       }
     } catch (err) {
       console.error("Failed to fetch admin follow-ups:", err);
