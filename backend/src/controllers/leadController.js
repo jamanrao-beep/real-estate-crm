@@ -520,6 +520,15 @@ async function updateFunnelStage(req, res) {
           })),
         });
       }
+    } else if (lead.funnelStage === "DEAL_CLOSED" && stage !== "DEAL_CLOSED") {
+      // Revert stale Deal Closed notification if lead stage was reverted
+      await prisma.notification.deleteMany({
+        where: {
+          message: {
+            contains: `finalized a deal with ${lead.name}`,
+          },
+        },
+      }).catch((e) => console.error("Failed to clean up deal notification:", e));
     }
 
     return res.json(updatedLead);

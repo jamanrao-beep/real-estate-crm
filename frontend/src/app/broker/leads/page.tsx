@@ -78,8 +78,19 @@ export default function MyLeadsPage() {
   };
 
   const updateStage = async (id: string, stage: string) => {
+    const lead = leads.find((l) => l.id === id);
+
+    if (stage === "DEAL_CLOSED") {
+      const confirmClose = window.confirm(
+        `Are you sure you want to mark "${lead?.name || "this lead"}" as DEAL CLOSED? This will mark the deal as finalized and notify all administrators.`
+      );
+      if (!confirmClose) {
+        setLeads((prev) => [...prev]);
+        return;
+      }
+    }
+
     try {
-      const lead = leads.find((l) => l.id === id);
       let nextCategory = lead?.category;
       if (stage === "CALLBACK") {
         nextCategory = "CALL_NOT_PICKED";

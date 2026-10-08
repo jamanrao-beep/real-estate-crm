@@ -792,8 +792,19 @@ export default function MyLeadsPage() {
   };
 
   const updateStage = async (id: string, stage: string) => {
+    const lead = leads.find((l) => l.id === id);
+
+    if (stage === "DEAL_CLOSED") {
+      const confirmClose = window.confirm(
+        `Are you sure you want to mark "${lead?.name || "this lead"}" as DEAL CLOSED? This will mark the deal as finalized and notify all administrators.`
+      );
+      if (!confirmClose) {
+        setLeads((prev) => [...prev]);
+        return;
+      }
+    }
+
     if (stage === "SITE_VISIT_DONE") {
-      const lead = leads.find((l) => l.id === id);
       if (lead) {
         openSiteVisitModal(lead);
         return;
@@ -801,7 +812,6 @@ export default function MyLeadsPage() {
     }
 
     if (stage === "OFFICE_VISIT_DONE") {
-      const lead = leads.find((l) => l.id === id);
       if (lead) {
         openOfficeVisitModal(lead);
         return;
@@ -809,7 +819,6 @@ export default function MyLeadsPage() {
     }
 
     try {
-      const lead = leads.find((l) => l.id === id);
       let nextCategory = lead?.category;
       if (stage === "CALLBACK") {
         nextCategory = "CALL_NOT_PICKED";
